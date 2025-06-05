@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlatList, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,13 +9,13 @@ type Row = { product_code: string; name: string | null };
 
 export default function FavoriteFoodsScreen() {
     const [list, setList] = useState<Row[]>([]);
-    const uidRef = useState<string | undefined>(undefined);
+    const uidRef = useRef<string>();
 
     /* tek sefer uid al */
     useFocusEffect(
         useCallback(() => {
             (async () => {
-                uidRef[1]((await supabase.auth.getUser()).data.user?.id);
+                uidRef.current = (await supabase.auth.getUser()).data.user?.id;
                 load();
             })();
         }, [])
@@ -23,7 +23,7 @@ export default function FavoriteFoodsScreen() {
 
     /* her fokus’ta yenile */
     const load = async () => {
-        const uid = uidRef[0];
+        const uid = uidRef.current;
         if (!uid) return;
 
         /* favori kodları */
