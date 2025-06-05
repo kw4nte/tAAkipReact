@@ -1,6 +1,7 @@
+// src/screens/ProfileEditScreen.tsx
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { Text, TextInput, Pressable, ScrollView, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
@@ -9,9 +10,8 @@ import DeleteAccountSheet from '../components/DeleteAccountSheet';
 
 export default function ProfileEditScreen() {
     const navigation = useNavigation();
-    const uid = supabase.auth.getUserSync()?.id;
 
-    const [name,   setName]   = useState('');
+    const [name, setName] = useState('');
     const [weight, setWeight] = useState('');
     const [height, setHeight] = useState('');
     const [showDel, setShowDel] = useState(false);
@@ -19,11 +19,17 @@ export default function ProfileEditScreen() {
     /* profil verisini çek */
     useEffect(() => {
         (async () => {
-            const { data } = await supabase
-                .from('profiles')
-                .select('full_name, weight_kg, height_cm')
-                .eq('id', uid)
-                .single();
+            // getUser() ile önce kullanıcıyı alalım
+                 const {
+                   data: { user },
+                 } = await supabase.auth.getUser();
+                 if (!user) return;
+
+                     const { data } = await supabase
+                   .from('profiles')
+                   .select('full_name, weight_kg, height_cm')
+                   .eq('id', user.id)
+                   .single();
 
             if (data) {
                 setName(data.full_name || '');
@@ -35,14 +41,20 @@ export default function ProfileEditScreen() {
 
     /* kaydet */
     const save = async () => {
-        await supabase
-            .from('profiles')
-            .update({
-                full_name: name,
-                weight_kg: weight ? Number(weight) : null,
-                height_cm: height ? Number(height) : null,
-            })
-            .eq('id', uid);
+        // Yine önce userId’i alalım
+           const {
+             data: { user },
+           } = await supabase.auth.getUser();
+           if (!user) return;
+
+               await supabase
+             .from('profiles')
+             .update({
+                   full_name: name,
+                   weight_kg: weight ? Number(weight) : null,
+                   height_cm: height ? Number(height) : null,
+                 })
+             .eq('id', user.id);
 
         navigation.goBack();
     };
@@ -80,23 +92,13 @@ export default function ProfileEditScreen() {
                 />
 
                 {/* kaydet */}
-                <Pressable
-                    onPress={save}
-                    style={tw`bg-antique-gold py-3 rounded-lg mb-4`}
-                >
-                    <Text style={tw`text-premium-black text-center font-medium`}>
-                        {i18n.t('save')}
-                    </Text>
+                <Pressable onPress={save} style={tw`bg-accent-gold py-3 rounded-lg mb-4`}>
+                    <Text style={tw`text-premium-black text-center font-medium`}>{i18n.t('save')}</Text>
                 </Pressable>
 
                 {/* hesap sil */}
-                <Pressable
-                    onPress={() => setShowDel(true)}
-                    style={tw`border border-antique-gold py-2 rounded-lg`}
-                >
-                    <Text style={tw`text-antique-gold text-center font-medium`}>
-                        {i18n.t('deleteAcc')}
-                    </Text>
+                <Pressable onPress={() => setShowDel(true)} style={tw`border border-accent-gold py-2 rounded-lg`}>
+                    <Text style={tw`text-accent-gold text-center font-medium`}>{i18n.t('deleteAcc')}</Text>
                 </Pressable>
             </ScrollView>
 

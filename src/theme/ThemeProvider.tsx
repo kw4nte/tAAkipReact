@@ -1,3 +1,4 @@
+// src/theme/ThemeProvider.tsx
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -6,13 +7,13 @@ type Palette = { background: string; text: string; accent: string };
 const light: Palette = {
     background: '#ffffff',
     text: '#0d0d0d',
-    accent: '#c5a630',
+    accent: '#d4af37', // Tailwind’deki accent-gold tonu
 };
 
 const dark: Palette = {
     background: '#0d0d0d',
     text: '#e5e4e2',
-    accent: '#ffd700',
+    accent: '#d4af37', // Tutarlı altın tonu
 };
 
 const ThemeContext = createContext<Palette>(light);

@@ -1,6 +1,7 @@
+// src/screens/CalorieTrackerScreen.tsx
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FlatList, Text } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
@@ -30,10 +31,7 @@ export default function CalorieTrackerScreen() {
     const loadWater = async () => {
         const uid = await getUid();
         if (!uid) return;
-        const { data } = await supabase
-            .from('water')
-            .select('ml')
-            .eq('user_id', uid);
+        const { data } = await supabase.from('water').select('ml').eq('user_id', uid);
         const total = (data ?? []).reduce((sum, row) => sum + Number(row.ml), 0);
         setWaterMl(total);
     };
@@ -55,35 +53,37 @@ export default function CalorieTrackerScreen() {
         <SafeAreaView style={tw`flex-1 bg-premium-black`}>
             {/* Üst kısım: su toplamı ve butonlar */}
             <SafeAreaView style={tw`p-4 border-b border-slate-gray`}>
-                <Text style={tw`text-accent-gold text-lg mb-2`}>
-                    Toplam Su: {waterMl} ml
-                </Text>
+                <Text style={tw`text-accent-gold text-lg mb-2`}>Toplam Su: {waterMl} ml</Text>
 
-                <PrimaryButton onPress={addWater}>+250 ml Su</PrimaryButton>
-                <PrimaryButton
-                    outlined
-                    onPress={() => nav.navigate('Favorites' as never)}
-                    style={tw`mt-2`}
-                >
+                <PrimaryButton onPress={addWater} style={tw`mb-2`}>
+                    +250 ml Su
+                </PrimaryButton>
+                <PrimaryButton outlined onPress={() => nav.navigate('Favorites' as never)} style={tw`mb-2`}>
                     Favori Ürünler
                 </PrimaryButton>
             </SafeAreaView>
 
             {/* Öğün listesi */}
-            <FlatList
-                data={entries}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={({ item }) => (
-                    <SafeAreaView style={tw`p-4 border-b border-slate-gray`}>
-                        <Text style={tw`text-accent-gold font-semibold`}>
-                            {item.food_name} ({item.quantity} {item.unit})
-                        </Text>
-                        <Text style={tw`text-platinum-gray`}>
-                            {item.calories} kcal • P{item.protein} C{item.carbs} F{item.fat}
-                        </Text>
-                    </SafeAreaView>
-                )}
-            />
+            {entries.length === 0 ? (
+                <View style={tw`flex-1 items-center justify-center`}>
+                    <Text style={tw`text-platinum-gray text-lg`}>Henüz öğün eklenmedi.</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={entries}
+                    keyExtractor={(item) => String(item.id)}
+                    renderItem={({ item }) => (
+                        <View style={tw`p-4 border-b border-slate-gray`}>
+                            <Text style={tw`text-accent-gold font-semibold`}>
+                                {item.food_name} ({item.quantity} {item.unit})
+                            </Text>
+                            <Text style={tw`text-platinum-gray`}>
+                                {item.calories} kcal • P{item.protein} C{item.carbs} F{item.fat}
+                            </Text>
+                        </View>
+                    )}
+                />
+            )}
         </SafeAreaView>
     );
 }

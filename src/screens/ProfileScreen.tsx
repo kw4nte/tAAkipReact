@@ -1,15 +1,16 @@
 // src/screens/ProfileScreen.tsx
-
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, View, Image } from 'react-native';
+import { Text, View, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import PrimaryButton from '../components/PrimaryButton';
+import { useAppStore } from '../store/useAppStore';
 
 export default function ProfileScreen() {
     const navigation = useNavigation();
+    const logoutStore = useAppStore((s) => s.logout);
     const [profile, setProfile] = useState<{ full_name: string; daily_target: number } | null>(null);
 
     useEffect(() => {
@@ -29,7 +30,7 @@ export default function ProfileScreen() {
 
     const signOut = async () => {
         await supabase.auth.signOut();
-        navigation.replace('Login' as never);
+        logoutStore();
     };
 
     return (
@@ -46,6 +47,14 @@ export default function ProfileScreen() {
             <Text style={tw`text-platinum-gray text-lg mb-6`}>
                 Günlük Hedef: {profile?.daily_target || 0} kcal
             </Text>
+
+            {/* Profil Düzenle Butonu */}
+            <Pressable
+                onPress={() => navigation.navigate('ProfileEdit' as never)}
+                style={tw`bg-soft-black px-6 py-3 rounded-lg w-full mb-4`}
+            >
+                <Text style={tw`text-accent-gold text-center font-medium`}>Profili Düzenle</Text>
+            </Pressable>
 
             {/* Çıkış Yap */}
             <PrimaryButton onPress={signOut}>Çıkış Yap</PrimaryButton>

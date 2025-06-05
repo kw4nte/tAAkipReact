@@ -1,3 +1,4 @@
+// tailwind.config.js
 module.exports = {
     content: ['./App.{js,jsx,ts,tsx}', './src/**/*.{js,jsx,ts,tsx}'],
     theme: {
@@ -7,8 +8,8 @@ module.exports = {
                 'soft-black':    '#111418',
                 'platinum-gray': '#e5e4e2',
                 'slate-gray':    '#5e6367',
-                'accent-gold':   '#d4af37',   // görünür “premium” altın
-                'accent-gold-dark': '#a78d2b',// basılı durum rengi
+                'accent-gold':   '#d4af37',
+                'accent-gold-dark': '#a78d2b',
             },
         },
     },

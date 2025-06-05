@@ -1,6 +1,7 @@
+// src/screens/LoginScreen.tsx
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, TextInput, Pressable } from 'react-native';
+import { Text, TextInput, Pressable } from 'react-native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import { useAppStore } from '../store/useAppStore';
@@ -20,8 +21,8 @@ export default function LoginScreen() {
     };
 
     return (
-        <SafeAreaView style={tw`flex-1 items-center justify-center bg-premium-black p-6`}>
-            <Text style={tw`text-classic-gold text-2xl mb-6`}>Giriş Yap</Text>
+        <SafeAreaView style={tw`flex-1 items-center justify-start bg-premium-black p-6 pt-12`}>
+            <Text style={tw`text-accent-gold text-2xl mb-6`}>Giriş Yap</Text>
 
             <TextInput
                 placeholder="E-posta"
@@ -41,7 +42,7 @@ export default function LoginScreen() {
                 style={tw`w-full border border-slate-gray rounded-lg px-3 py-2 mb-6 text-platinum-gray`}
             />
 
-            <Pressable onPress={onLogin} style={tw`bg-antique-gold px-6 py-3 rounded-lg w-full mt-2`}>
+            <Pressable onPress={onLogin} style={tw`bg-accent-gold px-6 py-3 rounded-lg w-full mt-4`}>
                 <Text style={tw`text-premium-black text-center font-medium`}>Giriş Yap</Text>
             </Pressable>
         </SafeAreaView>

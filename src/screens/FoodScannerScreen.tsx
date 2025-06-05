@@ -1,3 +1,4 @@
+// src/screens/FoodScannerScreen.tsx
 import { useEffect, useState } from 'react';
 import {
     View,
@@ -39,6 +40,8 @@ export default function FoodScannerScreen() {
             if (canUseCamera) {
                 const r = await Camera.requestCameraPermissionsAsync();
                 setHasPerm(r.status === 'granted');
+            } else {
+                setHasPerm(false);
             }
             loadHistory();
         })();
@@ -69,9 +72,7 @@ export default function FoodScannerScreen() {
 
         const uid = await getUid();
         if (uid) {
-            await supabase
-                .from('scan_history')
-                .insert({ user_id: uid, product_code: code });
+            await supabase.from('scan_history').insert({ user_id: uid, product_code: code });
             loadHistory();
         }
 
@@ -117,7 +118,6 @@ export default function FoodScannerScreen() {
             {/* Üstte iki buton: Barkod Tara / Barkod Gir */}
             <View style={tw`flex-row mb-4`}>
                 <Pressable
-                    disabled={!canUseCamera}
                     onPress={() => setMode('scan')}
                     style={tw`flex-1 py-3 mr-2 rounded-lg ${
                         mode === 'scan' ? 'bg-accent-gold' : 'bg-slate-gray'
@@ -148,6 +148,23 @@ export default function FoodScannerScreen() {
                 </Pressable>
             </View>
 
+            {/* Kamera izni bekleniyorken */}
+            {mode === 'scan' && hasPerm === null && (
+                <View style={tw`flex-1 items-center justify-center`}>
+                    <ActivityIndicator size="large" color="#ffd700" />
+                    <Text style={tw`text-platinum-gray mt-2`}>Kamera izni isteniyor...</Text>
+                </View>
+            )}
+
+            {/* Cihaz kamerayı desteklemiyorsa uyarı */}
+            {mode === 'scan' && canUseCamera && hasPerm === false && (
+                <View style={tw`flex-1 items-center justify-center`}>
+                    <Text style={tw`text-platinum-gray text-center`}>
+                        Kameraya erişim yok veya cihaz desteklemiyor.
+                    </Text>
+                </View>
+            )}
+
             {/* Manuel barkod girişi */}
             {mode === 'manual' && (
                 <View style={tw`flex-row mb-4`}>
@@ -177,7 +194,7 @@ export default function FoodScannerScreen() {
             )}
 
             {/* Son taramalar listesi */}
-            {history.length > 0 && (
+            {history.length > 0 ? (
                 <View style={tw`flex-1`}>
                     <Text style={tw`text-accent-gold mb-2`}>Son Taramalar</Text>
                     <FlatList
@@ -196,6 +213,10 @@ export default function FoodScannerScreen() {
                             </Pressable>
                         )}
                     />
+                </View>
+            ) : (
+                <View style={tw`flex-1 items-center justify-center`}>
+                    <Text style={tw`text-platinum-gray text-center`}>Henüz tarama geçmişi yok.</Text>
                 </View>
             )}
 
