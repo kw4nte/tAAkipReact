@@ -1,13 +1,19 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, StyleProp, ViewStyle } from 'react-native';
 import tw from '../theme/tw';
 
 type Props = {
     children: string;
     onPress: () => void;
     outlined?: boolean;
+    style?: StyleProp<ViewStyle>;
 };
 
-export default function PrimaryButton({ children, onPress, outlined }: Props) {
+export default function PrimaryButton({
+    children,
+    onPress,
+    outlined,
+    style,
+}: Props) {
     const base = outlined
         ? 'border border-accent-gold px-4 py-3'
         : 'bg-accent-gold px-4 py-3';
@@ -18,7 +24,8 @@ export default function PrimaryButton({ children, onPress, outlined }: Props) {
                 tw.style(
                     base,
                     'rounded-lg',
-                    pressed && (outlined ? 'bg-accent-gold-dark' : 'opacity-80')
+                    pressed && (outlined ? 'bg-accent-gold-dark' : 'opacity-80'),
+                    style
                 )
             }
         >
