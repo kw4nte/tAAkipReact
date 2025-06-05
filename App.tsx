@@ -1,20 +1,26 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import { ThemeProvider, useThemeColors } from './src/theme/ThemeProvider';
+import RootNavigator from './src/navigation/RootNavigator';
+import i18n from './src/i18n';
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+function ThemedStatusBar() {
+    const { background } = useThemeColors();
+    return (
+        <StatusBar style="auto" backgroundColor={background} translucent={false} />
+    );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+    return (
+        <ErrorBoundary>
+            <SafeAreaProvider>
+                <ThemeProvider>
+                    <ThemedStatusBar />
+                    <RootNavigator />
+                </ThemeProvider>
+            </SafeAreaProvider>
+        </ErrorBoundary>
+    );
+}
