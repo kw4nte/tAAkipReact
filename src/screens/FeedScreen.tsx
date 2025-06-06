@@ -32,8 +32,9 @@ export default function FeedScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const nav = useNavigation();
 
-    // Gönderileri Supabase'ten çekmek için fonksiyon
+    // 1) Post listesini Supabase'ten çekme fonksiyonu
     const load = async () => {
+        // Eğer feed_list bir view ise .from('feed_list') ile select yapabilirsiniz:
         const { data, error } = await supabase
             .from<Post>('feed_list')
             .select('*')
@@ -47,21 +48,21 @@ export default function FeedScreen() {
         }
     };
 
-    // Ekran her odaklandığında "load()" çalışsın
+    // 2) Ekran her “focus” olduğunda load() çağrılsın
     useFocusEffect(
         useCallback(() => {
             load();
         }, [])
     );
 
-    // Pull-to-refresh işlemi
+    // 3) Pull-to-refresh için callback
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await load();
         setRefreshing(false);
     }, []);
 
-    // Beğeni toggle ve anlık yenileme
+    // 4) Like/Unlike işlemi ve ardından listeyi yeniden yükleme
     const toggleLike = async (postId: number, liked: boolean) => {
         const {
             data: { user },
@@ -77,14 +78,22 @@ export default function FeedScreen() {
         } else {
             await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
         }
-        // Beğeni güncellendikten hemen sonra listeyi yenile
+
+        // Beğeni işlemi tamamlandıktan hemen sonra listeyi yeniden yükle
         load();
     };
 
-    // RenderItem
+    // 5) Her bir post için renderItem fonksiyonu
     const renderItem = ({ item }: { item: Post }) => (
         <View style={tw`bg-soft-black border border-slate-gray rounded-lg p-4 mb-3`}>
-            {/* Media varsa */}
+            {/* 5.1) Eğer media_url varsa resmi göster */}
+
+
+            {/* 5.2) Kullanıcı adı ve içerik */}
+            <Text style={tw`text-accent-gold font-semibold mb-1`}>
+                {item.full_name ?? 'Kullanıcı'}
+            </Text>
+
             {item.media_url ? (
                 <Image
                     source={{ uri: item.media_url }}
@@ -92,14 +101,8 @@ export default function FeedScreen() {
                     resizeMode="cover"
                 />
             ) : null}
-
-            {/* Kullanıcı adı ve içerik */}
-            <Text style={tw`text-accent-gold font-semibold mb-1`}>
-                {item.full_name ?? 'Kullanıcı'}
-            </Text>
             <Text style={tw`text-platinum-gray mb-3`}>{item.content}</Text>
-
-            {/* Beğeni ve yorum ikonları */}
+            {/* 5.3) Beğeni ve yorum ikonları */}
             <View style={tw`flex-row items-center`}>
                 <Pressable onPress={() => toggleLike(item.id, item.liked)}>
                     <Ionicons
@@ -120,6 +123,7 @@ export default function FeedScreen() {
 
     return (
         <SafeAreaView style={tw`flex-1 bg-premium-black p-4`}>
+            {/** Eğer hiç post yoksa “Henüz gönderi yok.” yazısı göster */}
             {posts.length === 0 ? (
                 <View style={tw`flex-1 items-center justify-center`}>
                     <Text style={tw`text-platinum-gray text-lg`}>Henüz gönderi yok.</Text>
@@ -130,17 +134,18 @@ export default function FeedScreen() {
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderItem}
                     showsVerticalScrollIndicator={false}
+                    // 6) Pull‐to‐refresh için RefreshControl
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            tintColor="#fff"
+                            tintColor="#fff" // iOS'da spinner beyaz görünsün diye
                         />
                     }
                 />
             )}
 
-            {/* FAB: Yeni gönderi oluşturmak için + butonu */}
+            {/** 7) FAB: Yeni gönderi oluşturma ekranına gitmek için buton */}
             <FAB onPress={() => nav.navigate('PostComposer')} />
         </SafeAreaView>
     );

@@ -86,8 +86,9 @@ export default function PostComposerScreen() {
                 const fileExt = media.uri.split('.').pop();
                 const fileName = `${uid}_${Date.now()}.${fileExt}`;
 
+                // *** BU SATIR DÜZELTİLDİ: 'feed_media' → 'feed-media' ***
                 const result = await supabase.storage
-                    .from('feed_media')
+                    .from('feed-media')
                     .upload(fileName, {
                         uri: media.uri,
                         type: media.type ?? 'image/jpeg',
@@ -99,15 +100,23 @@ export default function PostComposerScreen() {
                     throw new Error('Görsel yüklenemedi.');
                 }
 
-                const {
-                    data: { publicUrl },
-                } = supabase.storage.from('feed_media').getPublicUrl(fileName);
-                url = publicUrl;
+                // getPublicUrl dönen obje: { data: { publicUrl }, error }
+                const { data: publicData, error: publicErr } = supabase.storage
+                    .from('feed-media')
+                    .getPublicUrl(fileName);
+
+                if (publicErr) {
+                    console.error('Public URL error:', publicErr.message);
+                    throw new Error('Görselin URL’i alınamadı.');
+                }
+                url = publicData.publicUrl;
             } catch (err: any) {
                 console.error('Media upload hatası:', err.message);
                 Alert.alert(
                     'Hata',
-                    err.message.startsWith('Görsel') ? err.message : 'Resim yüklenirken bir sorun oluştu.'
+                    err.message.startsWith('Görsel')
+                        ? err.message
+                        : 'Resim yüklenirken bir sorun oluştu.'
                 );
                 setUploading(false);
                 return;
