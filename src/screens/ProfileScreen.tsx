@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, View, Image, Pressable, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import PrimaryButton from '../components/PrimaryButton';
@@ -27,8 +27,10 @@ export default function ProfileScreen() {
     const logoutStore = useAppStore((s) => s.logout);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
+    const isFocused = useIsFocused();
 
     useEffect(() => {
+        if (!isFocused) return;
         (async () => {
             setLoading(true);
             const {
@@ -69,7 +71,7 @@ export default function ProfileScreen() {
             }
             setLoading(false);
         })();
-    }, []);
+    }, [isFocused]);
 
     const signOut = async () => {
         const { error } = await supabase.auth.signOut();
