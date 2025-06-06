@@ -49,7 +49,8 @@ export async function fetchProduct(
             };
         }
         return null;
-    } catch {
+    } catch (err) {
+        console.error('OpenFood API error:', err);
         return null;
     }
 }

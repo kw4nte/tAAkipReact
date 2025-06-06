@@ -69,14 +69,21 @@ export default function FeedScreen() {
         } = await supabase.auth.getUser();
         if (!user) return;
 
+        let error;
         if (liked) {
-            await supabase
+            ({ error } = await supabase
                 .from('likes')
                 .delete()
                 .eq('post_id', postId)
-                .eq('user_id', user.id);
+                .eq('user_id', user.id));
         } else {
-            await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
+            ({ error } = await supabase
+                .from('likes')
+                .insert({ post_id: postId, user_id: user.id }));
+        }
+
+        if (error) {
+            console.error('Like toggle error:', error.message);
         }
 
         // Beğeni işlemi tamamlandıktan hemen sonra listeyi yeniden yükle
