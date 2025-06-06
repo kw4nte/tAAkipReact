@@ -117,7 +117,7 @@ export default function ProfileEditScreen() {
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 quality: 0.7,
             });
-            if (!res.canceled) return;
+            if (res.canceled) return;
 
             const asset = res.assets[0];
             if (!asset.uri) return;
