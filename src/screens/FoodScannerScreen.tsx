@@ -144,8 +144,9 @@ export default function FoodScannerScreen() {
         const { error } = await supabase.from('favorites').upsert({
             user_id: uid,
             product_code: product.code,
-            // Eğer profilinizde product_name veya image_url varsa,
-            // bu alanları tabloya ekleyebilirsiniz. Fakat tablo yapınızda yoksa çıkarmalısınız:
+            // Eğer favoriler tablonuzda product_name veya image_url alanı varsa,
+            // burada bu iki alanı da ekleyebilirsiniz. Ama eğer tablonuzda bu sütunlar yoksa,
+            // aşağıdaki yorum içindeki satırları kaldırıp yalnızca user_id/product_code gönderin.
             // product_name: product.product_name,
             // image_url: product.image_url ?? '',
         });
@@ -241,7 +242,7 @@ export default function FoodScannerScreen() {
                     <Text style={tw`text-accent-gold mb-2`}>Son Taramalar</Text>
                     <FlatList
                         data={history}
-                        keyExtractor={(c) => c}
+                        keyExtractor={(code, index) => `${code}-${index}`} // <-- Burada değişiklik oldu
                         renderItem={renderHistoryItem}
                     />
                 </View>
@@ -284,9 +285,7 @@ export default function FoodScannerScreen() {
                                     keyboardType="numeric"
                                     style={tw`border border-accent-gold bg-soft-black text-accent-gold text-center w-16 px-2 py-1 rounded-lg mr-2`}
                                 />
-                                <View
-                                    style={tw`border border-accent-gold bg-soft-black rounded-lg`}
-                                >
+                                <View style={tw`border border-accent-gold bg-soft-black rounded-lg`}>
                                     <Text style={tw`text-accent-gold px-2 py-1`}>
                                         {displayUnit}
                                     </Text>
@@ -298,9 +297,7 @@ export default function FoodScannerScreen() {
                                 onPress={addToTracker}
                                 style={tw`bg-accent-gold py-3 rounded-lg mb-2`}
                             >
-                                <Text
-                                    style={tw`text-premium-black text-center font-medium`}
-                                >
+                                <Text style={tw`text-premium-black text-center font-medium`}>
                                     Öğününe Ekle
                                 </Text>
                             </Pressable>
@@ -309,9 +306,7 @@ export default function FoodScannerScreen() {
                                 onPress={addFavorite}
                                 style={tw`border border-accent-gold py-3 rounded-lg mb-4`}
                             >
-                                <Text
-                                    style={tw`text-accent-gold text-center font-medium`}
-                                >
+                                <Text style={tw`text-accent-gold text-center font-medium`}>
                                     Favoriye Kaydet ⭐️
                                 </Text>
                             </Pressable>
@@ -328,22 +323,17 @@ export default function FoodScannerScreen() {
 
                                 return (
                                     <>
-                                        <Text
-                                            style={tw`text-accent-gold text-lg mb-2`}
-                                        >
-                                            Kalori ({portion} {displayUnit}):{' '}
-                                            {Math.round(cal)} kcal
+                                        <Text style={tw`text-accent-gold text-lg mb-2`}>
+                                            Kalori ({portion} {displayUnit}): {Math.round(cal)} kcal
                                         </Text>
                                         <Text style={tw`text-platinum-gray mb-1`}>
                                             Yağ ({portion} {displayUnit}): {fat.toFixed(1)} g
                                         </Text>
                                         <Text style={tw`text-platinum-gray mb-1`}>
-                                            Karbonhidrat ({portion} {displayUnit}):{' '}
-                                            {carbs.toFixed(1)} g
+                                            Karbonhidrat ({portion} {displayUnit}): {carbs.toFixed(1)} g
                                         </Text>
                                         <Text style={tw`text-platinum-gray mb-4`}>
-                                            Protein ({portion} {displayUnit}):{' '}
-                                            {protein.toFixed(1)} g
+                                            Protein ({portion} {displayUnit}): {protein.toFixed(1)} g
                                         </Text>
                                     </>
                                 );
@@ -385,9 +375,7 @@ export default function FoodScannerScreen() {
                                 }}
                                 style={tw`mb-8`}
                             >
-                                <Text style={tw`text-platinum-gray text-center`}>
-                                    Kapat
-                                </Text>
+                                <Text style={tw`text-platinum-gray text-center`}>Kapat</Text>
                             </Pressable>
                         </ScrollView>
                     )}
