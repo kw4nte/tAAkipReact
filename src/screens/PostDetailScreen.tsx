@@ -9,13 +9,19 @@ export default function PostDetailScreen({ route }) {
     const [comments, setComments] = useState([]);
     const [txt, setTxt] = useState('');
 
-    const load = () =>
-        supabase
+    const load = async () => {
+        const { data, error } = await supabase
             .from('comments')
             .select('id,text,created_at,profiles(full_name)')
             .eq('post_id', postId)
-            .order('created_at', { ascending: false })
-            .then(({ data }) => setComments(data ?? []));
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error('Comments load error:', error.message);
+            setComments([]);
+        } else {
+            setComments(data ?? []);
+        }
+    };
 
     useEffect(() => {
         load();
@@ -32,8 +38,14 @@ export default function PostDetailScreen({ route }) {
 
     const send = async () => {
         if (!txt) return;
-        await supabase.from('comments').insert({ post_id: postId, text: txt });
-        setTxt('');
+        const { error } = await supabase
+            .from('comments')
+            .insert({ post_id: postId, text: txt });
+        if (error) {
+            console.error('Comment send error:', error.message);
+        } else {
+            setTxt('');
+        }
     };
 
     return (

@@ -6,9 +6,17 @@ import i18n from '../i18n';
 export default function DeleteAccountSheet({ visible, onClose }) {
   const del = async () => {
     const uid = (await supabase.auth.getUser()).data.user?.id;
-    if(uid){
-      await supabase.functions.invoke('delete_user',{ body:{ user_id: uid }});
-      await supabase.auth.signOut();
+    if (!uid) return;
+    const { error } = await supabase.functions.invoke('delete_user', {
+      body: { user_id: uid }
+    });
+    if (error) {
+      console.error('Delete user function error:', error.message);
+      return;
+    }
+    const { error: signOutErr } = await supabase.auth.signOut();
+    if (signOutErr) {
+      console.error('Sign out error:', signOutErr.message);
     }
   };
   return (
@@ -19,7 +27,7 @@ export default function DeleteAccountSheet({ visible, onClose }) {
           <Text style={tw`text-premium-black text-center`}>{i18n.t('deleteAcc')}</Text>
         </Pressable>
         <Pressable onPress={onClose}>
-          <Text style={tw`text-antique-gold text-center`}>İptal</Text>
+          <Text style={tw`text-antique-gold text-center`}>{i18n.t('cancel')}</Text>
         </Pressable>
       </View>
     </Modal>
