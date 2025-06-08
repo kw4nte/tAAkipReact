@@ -14,7 +14,7 @@ import {
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ExpoCamera from 'expo-camera';
+import { Camera } from 'expo-camera';
 import * as Device from 'expo-device';
 import tw from '../theme/tw';
 import { fetchProduct, Product } from '../services/openFoodApi';
@@ -41,7 +41,7 @@ export default function FoodScannerScreen() {
     useEffect(() => {
         (async () => {
             if (canUseCamera) {
-                const r = await ExpoCamera.Camera.requestCameraPermissionsAsync();
+                const r = await Camera.requestCameraPermissionsAsync();
                 setHasPerm(r.status === 'granted');
             }
             await loadHistory();
@@ -227,7 +227,7 @@ export default function FoodScannerScreen() {
 
             {/* 3) Camera View */}
             {mode === 'scan' && canUseCamera && hasPerm && (
-                <ExpoCamera.Camera
+                <Camera
                     onBarCodeScanned={({ data }) => {
                         setMode('idle');
                         handleFetch(data);
