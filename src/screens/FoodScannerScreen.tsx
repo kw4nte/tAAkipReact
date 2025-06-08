@@ -1,60 +1,65 @@
 // src/screens/FoodScannerScreen.tsx
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
     TextInput,
     Pressable,
-    Modal,
-    ActivityIndicator,
     FlatList,
-    ScrollView,
-    Image,
     Alert,
+    Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
+import { useIsFocused } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import tw from '../theme/tw';
 import { fetchProduct, Product } from '../services/openFoodApi';
 import { supabase } from '../lib/supa';
 import PrimaryButton from '../components/PrimaryButton';
+import FoodDetailModal from '../components/FoodDetailModal';
+
+interface ScanHistoryItem {
+    product_code: string;
+    product_name: string | null;
+}
 
 export default function FoodScannerScreen() {
-    const [hasPerm, setHasPerm] = useState<boolean | null>(null);
+    const [permission, requestPermission] = useCameraPermissions();
     const [mode, setMode] = useState<'idle' | 'scan' | 'manual'>('idle');
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [product, setProduct] = useState<Product | null>(null);
-    const [history, setHistory] = useState<string[]>([]);
+    const [history, setHistory] = useState<ScanHistoryItem[]>([]);
 
-    const [portion, setPortion] = useState('100');
-    const [displayUnit, setDisplayUnit] = useState<'g' | 'ml'>('g');
+    const [isFlashOn, setIsFlashOn] = useState(false);
+    const isFocused = useIsFocused();
+    const isScanningRef = useRef(false);
 
     const canUseCamera = Device.isDevice;
-
-    // UID helper
     const getUid = async () => (await supabase.auth.getUser()).data.user?.id;
 
-    // 1) On mount: request camera permission & load history
     useEffect(() => {
-        (async () => {
-            if (canUseCamera) {
-                const r = await Camera.requestCameraPermissionsAsync();
-                setHasPerm(r.status === 'granted');
-            }
-            await loadHistory();
-        })();
+        if (canUseCamera && !permission?.granted) {
+            requestPermission();
+        }
+        loadHistory();
     }, []);
 
-    // 2) Load scan history
+    useEffect(() => {
+        if (!isFocused) {
+            setIsFlashOn(false);
+        }
+    }, [isFocused]);
+
     const loadHistory = async () => {
         const uid = await getUid();
         if (!uid) return;
         const { data, error } = await supabase
             .from('scan_history')
-            .select('product_code')
+            .select('product_code, product_name')
             .eq('user_id', uid)
             .order('scanned_at', { ascending: false })
             .limit(20);
@@ -63,54 +68,68 @@ export default function FoodScannerScreen() {
             console.error('History load error:', error.message);
             return;
         }
-        setHistory((data ?? []).map((x) => x.product_code));
+        setHistory(data ?? []);
     };
 
-    // 3) Fetch product from API & save to history
-    const handleFetch = async (code: string) => {
-        if (!code.trim()) return;
-        setLoading(true);
 
-        // 3a) Fetch from API
-        const fetched = await fetchProduct(code.trim());
-        if (!fetched) {
-            Alert.alert('Ürün Bulunamadı', 'Bu barkoda ait ürün bulunamadı.');
-            setLoading(false);
+    const handleFetch = async (code: string) => {
+        if (!code.trim()) {
+            // isScanningRef'i burada sıfırlamaya gerek yok, çünkü tarama moduna girerken sıfırlanıyor.
             return;
         }
 
-        setProduct(fetched);
-        setDisplayUnit(fetched.serving_quantity_unit === 'ml' ? 'ml' : 'g');
-        setPortion('100');
+        setLoading(true);
+        setMode('idle'); // Tarama sonrası kamerayı hemen kapat
 
-        // 3b) Insert into scan_history
-        const uid = await getUid();
-        if (uid) {
-            const { error: insertErr } = await supabase.from('scan_history').insert({
-                user_id: uid,
-                product_code: code.trim(),
-            });
-            if (insertErr) {
-                console.error('History insert error:', insertErr.message);
-            } else {
-                await loadHistory();
+        try {
+            const fetched = await fetchProduct(code.trim());
+
+            if (!fetched) {
+                Alert.alert('Ürün Bulunamadı', 'Bu barkoda ait ürün bulunamadı.');
+                // 'finally' bloğu çalıştığı için burada setLoading(false) demeye gerek yok.
+                return;
             }
-        }
 
-        setLoading(false);
+            setProduct(fetched);
+
+            const uid = await getUid();
+            if (uid) {
+                const { error: insertErr } = await supabase.from('scan_history').insert({
+                    user_id: uid,
+                    product_code: code.trim(),
+                    product_name: fetched.product_name || 'İsimsiz Ürün',
+                });
+                if (insertErr) {
+                    console.error('History insert error:', insertErr.message);
+                } else {
+                    await loadHistory();
+                }
+            }
+        } catch (error) {
+            console.error("handleFetch error:", error);
+            Alert.alert("Hata", "Ürün bilgisi alınırken bir sorun oluştu.");
+        } finally {
+            // Bu blok, yukarıdaki işlemler başarılı da olsa hata da verse HER ZAMAN çalışır.
+            setLoading(false);
+        }
     };
 
-    // 4) Add to tracker
-    const addToTracker = async () => {
+
+    const handleAddToTracker = async (portion: number, unit: 'g' | 'ml') => {
         if (!product) return;
+
+        // 1. İşlem başlarken yüklemeyi başlat
+        setLoading(true);
+
         const uid = await getUid();
         if (!uid) {
             Alert.alert('Hata', 'Kullanıcı bulunamadı.');
+            setLoading(false); // Hata durumunda yüklemeyi bitir
             return;
         }
 
         const n = product.nutriments;
-        const factor = Number(portion) / 100;
+        const factor = portion / 100;
 
         const { error } = await supabase.from('meals').insert({
             user_id: uid,
@@ -119,58 +138,75 @@ export default function FoodScannerScreen() {
             protein: (n.proteins_100g ?? 0) * factor,
             carbs: (n.carbohydrates_100g ?? 0) * factor,
             fat: (n.fat_100g ?? 0) * factor,
-            quantity: Number(portion),
-            unit: displayUnit,
+            quantity: portion,
+            unit: unit,
         });
+
+        // 2. İşlem bittiğinde, sonuç ne olursa olsun yüklemeyi bitir
+        setLoading(false);
 
         if (error) {
             console.error('Add to tracker error:', error.message);
             Alert.alert('Hata', 'Öğün eklenemedi.');
         } else {
             Alert.alert('Başarılı', 'Öğün kaydedildi.');
-            setProduct(null);
+            setProduct(null); // Başarılı eklemeden sonra modal'ı kapat
         }
     };
 
-    // 5) Add to favorites
-    const addFavorite = async () => {
+    const handleAddFavorite = async () => {
         if (!product) return;
         const uid = await getUid();
-        if (!uid) {
-            Alert.alert('Hata', 'Kullanıcı bulunamadı.');
-            return;
-        }
-        // Sadece user_id ve product_code minimal olarak gönderiyoruz.
+        if (!uid) { Alert.alert('Hata', 'Kullanıcı bulunamadı.'); return; }
+
         const { error } = await supabase.from('favorites').upsert({
             user_id: uid,
             product_code: product.code,
-            // Eğer favoriler tablonuzda product_name veya image_url alanı varsa,
-            // burada bu iki alanı da ekleyebilirsiniz. Ama eğer tablonuzda bu sütunlar yoksa,
-            // aşağıdaki yorum içindeki satırları kaldırıp yalnızca user_id/product_code gönderin.
-            // product_name: product.product_name,
-            // image_url: product.image_url ?? '',
         });
-        if (error) {
-            console.error('Favorite insert error:', error.message);
-            Alert.alert('Hata', 'Favoriye eklenemedi.');
-        } else {
-            Alert.alert('Başarılı', 'Favorilere eklendi.');
-        }
+
+        if (error) { Alert.alert('Hata', 'Favoriye eklenemedi.'); }
+        else { Alert.alert('Başarılı', 'Favorilere eklendi.'); }
     };
 
+    const handleModalClose = () => {
+        setProduct(null);
+        setLoading(false);
+        // Tarama kilidini burada açmıyoruz, çünkü tarama moduna girerken açılıyor.
+    };
+
+
     // Render history item
-    const renderHistoryItem = ({ item }: { item: string }) => (
+    const renderHistoryItem = ({ item }: { item: ScanHistoryItem }) => (
         <Pressable
             onPress={() => {
-                setInput(item);
+                setInput(item.product_code);
                 setMode('manual');
-                handleFetch(item);
+                handleFetch(item.product_code);
             }}
-            style={tw`py-2 border-b border-slate-gray`}
+            // Dikey boşluk py-4 oldu, sınır rengi değişti
+            style={tw`py-4 border-b border-slate-700`}
         >
-            <Text style={tw`text-platinum-gray`}>{item}</Text>
+            <Text
+                // Font büyütüldü ve kalınlaştırıldı
+                style={tw`text-platinum-gray text-base font-semibold`}
+            >
+                {item.product_name || item.product_code}
+            </Text>
         </Pressable>
     );
+
+    if (!permission) return <View />;
+
+    if (!permission.granted) {
+        return (
+            <SafeAreaView style={tw`flex-1 bg-premium-black p-4 justify-center items-center`}>
+                <Text style={tw`text-platinum-gray text-center mb-4`}>
+                    Kamerayı kullanmak için izin vermelisiniz.
+                </Text>
+                <PrimaryButton onPress={requestPermission}>İzin Ver</PrimaryButton>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={tw`flex-1 bg-premium-black p-4`}>
@@ -178,31 +214,26 @@ export default function FoodScannerScreen() {
             <View style={tw`flex-row mb-4`}>
                 <Pressable
                     disabled={!canUseCamera}
-                    onPress={() => setMode('scan')}
+                    onPress={() => {
+                        // Tarama moduna girerken ref'i sıfırla
+                        isScanningRef.current = false;
+                        setMode('scan');
+                    }}
                     style={tw`flex-1 py-3 mr-2 rounded-lg ${
                         mode === 'scan' ? 'bg-accent-gold' : 'bg-slate-gray'
                     } ${!canUseCamera && 'opacity-40'}`}
                 >
-                    <Text
-                        style={tw`text-center ${
-                            mode === 'scan' ? 'text-premium-black' : 'text-platinum-gray'
-                        }`}
-                    >
+                    <Text style={tw`text-center ${mode === 'scan' ? 'text-premium-black' : 'text-platinum-gray'}`}>
                         Barkod Tara
                     </Text>
                 </Pressable>
-
                 <Pressable
                     onPress={() => setMode('manual')}
                     style={tw`flex-1 py-3 rounded-lg ${
                         mode === 'manual' ? 'bg-accent-gold' : 'bg-slate-gray'
                     }`}
                 >
-                    <Text
-                        style={tw`text-center ${
-                            mode === 'manual' ? 'text-premium-black' : 'text-platinum-gray'
-                        }`}
-                    >
+                    <Text style={tw`text-center ${mode === 'manual' ? 'text-premium-black' : 'text-platinum-gray'}`}>
                         Barkod Gir
                     </Text>
                 </Pressable>
@@ -210,7 +241,7 @@ export default function FoodScannerScreen() {
 
             {/* 2) Manual barcode input */}
             {mode === 'manual' && (
-                <View style={tw`flex-row mb-4`}>
+                <View style={tw`flex-row items-center mb-4`}>
                     <TextInput
                         placeholder="Barkod numarası"
                         placeholderTextColor="#666"
@@ -219,168 +250,78 @@ export default function FoodScannerScreen() {
                         value={input}
                         onChangeText={setInput}
                     />
+                    {/* Madde 1: Input temizleme ve klavye kapatma butonu */}
+                    {input.length > 0 && (
+                        <Pressable
+                            onPress={() => {
+                                setInput('');
+                                Keyboard.dismiss();
+                            }}
+                            style={tw`p-2 ml-2`}
+                        >
+                            <Ionicons name="close-circle" size={24} color="grey" />
+                        </Pressable>
+                    )}
                     <PrimaryButton onPress={() => handleFetch(input)} style={tw`ml-2`}>
                         Ara
                     </PrimaryButton>
                 </View>
             )}
 
-            {/* 3) Camera View */}
-            {mode === 'scan' && canUseCamera && hasPerm && (
-                <Camera
-                    onBarCodeScanned={({ data }) => {
-                        setMode('idle');
-                        handleFetch(data);
-                    }}
-                    style={tw`flex-1 mb-4`}
-                />
+            {/* Madde 2: Yeni Kamera ve Flaş Butonu Alanı */}
+            {mode === 'scan' && canUseCamera && (
+                <View style={tw`flex-1 justify-center items-center`}>
+                    {/* Kamera için kare alan */}
+                    <View style={tw`w-full aspect-1 overflow-hidden rounded-lg`}>
+                        <CameraView
+                            enableTorch={isFlashOn}
+                            onBarcodeScanned={(scanningResult) => {
+                                // Senkron kilit mekanizması
+                                if (!isScanningRef.current) {
+                                    isScanningRef.current = true;
+                                    handleFetch(scanningResult.data);
+                                }
+                            }}
+                            style={tw`flex-1`}
+                        />
+                        {/* Tarama Çerçevesi ve Çizgisi */}
+                        <View style={tw`absolute inset-0 justify-center items-center`}>
+                            <View style={tw`w-3/4 h-1/2 border-2 border-white/50 rounded-lg`} />
+                            <View style={tw`absolute w-3/4 h-px bg-red-500`} />
+                        </View>
+                    </View>
+                    {/* Flaş Butonu */}
+                    <Pressable
+                        onPress={() => setIsFlashOn(prev => !prev)}
+                        style={tw`mt-4 p-3 rounded-full ${isFlashOn ? 'bg-yellow-400' : 'bg-slate-600'}`}
+                    >
+                        <Ionicons name={isFlashOn ? "flash" : "flash-off"} size={24} color="white" />
+                    </Pressable>
+                </View>
             )}
 
-            {/* 4) History List */}
-            {history.length > 0 && !product && (
+            {/* History List */}
+            {mode !== 'scan' && history.length > 0 && !product && (
                 <View style={tw`flex-1`}>
-                    <Text style={tw`text-accent-gold mb-2`}>Son Taramalar</Text>
+                    <Text style={tw`text-accent-gold mb-2 text-xl font-bold`}>Son Taramalar</Text>
                     <FlatList
                         data={history}
-                        keyExtractor={(code, index) => `${code}-${index}`} // <-- Burada değişiklik oldu
+                        // Madde 3: Benzersiz key için index kullanıldı
+                        keyExtractor={(item, index) => `${item.product_code}-${index}`}
                         renderItem={renderHistoryItem}
                     />
                 </View>
             )}
 
-            {/* 5) Product Detail Modal */}
-            <Modal visible={loading || !!product} animationType="slide">
-                <SafeAreaView style={tw`flex-1 bg-premium-black`}>
-                    {loading && (
-                        <View style={tw`flex-1 justify-center items-center`}>
-                            <ActivityIndicator size="large" color="#ffd700" />
-                        </View>
-                    )}
-
-                    {product && (
-                        <ScrollView
-                            contentContainerStyle={tw`p-4 pb-8`}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {/* 5.1) Product Image */}
-                            {product.image_url && (
-                                <Image
-                                    source={{ uri: product.image_url }}
-                                    style={tw`w-full h-48 rounded-lg mb-4`}
-                                    resizeMode="cover"
-                                />
-                            )}
-
-                            {/* 5.2) Product Name */}
-                            <Text style={tw`text-accent-gold text-2xl font-bold mb-4`}>
-                                {product.product_name}
-                            </Text>
-
-                            {/* 5.3) Portion / Unit Row */}
-                            <View style={tw`flex-row items-center mb-4`}>
-                                <Text style={tw`text-platinum-gray mr-2`}>Porsiyon:</Text>
-                                <TextInput
-                                    value={portion}
-                                    onChangeText={setPortion}
-                                    keyboardType="numeric"
-                                    style={tw`border border-accent-gold bg-soft-black text-accent-gold text-center w-16 px-2 py-1 rounded-lg mr-2`}
-                                />
-                                <View style={tw`border border-accent-gold bg-soft-black rounded-lg`}>
-                                    <Text style={tw`text-accent-gold px-2 py-1`}>
-                                        {displayUnit}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* 5.4) Add to Tracker & Favorite Buttons */}
-                            <Pressable
-                                onPress={addToTracker}
-                                style={tw`bg-accent-gold py-3 rounded-lg mb-2`}
-                            >
-                                <Text style={tw`text-premium-black text-center font-medium`}>
-                                    Öğününe Ekle
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                onPress={addFavorite}
-                                style={tw`border border-accent-gold py-3 rounded-lg mb-4`}
-                            >
-                                <Text style={tw`text-accent-gold text-center font-medium`}>
-                                    Favoriye Kaydet ⭐️
-                                </Text>
-                            </Pressable>
-
-                            {/* 5.5) Main Macros (Calories, Fat, Carbs, Protein) */}
-                            {(() => {
-                                const n = product.nutriments;
-                                const f = Number(portion) / 100;
-
-                                const cal = (n['energy-kcal_100g'] ?? 0) * f;
-                                const fat = (n.fat_100g ?? 0) * f;
-                                const carbs = (n.carbohydrates_100g ?? 0) * f;
-                                const protein = (n.proteins_100g ?? 0) * f;
-
-                                return (
-                                    <>
-                                        <Text style={tw`text-accent-gold text-lg mb-2`}>
-                                            Kalori ({portion} {displayUnit}): {Math.round(cal)} kcal
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-1`}>
-                                            Yağ ({portion} {displayUnit}): {fat.toFixed(1)} g
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-1`}>
-                                            Karbonhidrat ({portion} {displayUnit}): {carbs.toFixed(1)} g
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-4`}>
-                                            Protein ({portion} {displayUnit}): {protein.toFixed(1)} g
-                                        </Text>
-                                    </>
-                                );
-                            })()}
-
-                            {/* 5.6) Additional Nutrients (Fiber, Sugars, Sodium, Saturated Fat) */}
-                            {(() => {
-                                const n = product.nutriments;
-                                const f = Number(portion) / 100;
-
-                                const fiber = (n.fiber_100g ?? 0) * f;
-                                const sugars = (n.sugars_100g ?? 0) * f;
-                                const sodium = (n.sodium_100g ?? 0) * f;
-                                const satFat = (n['saturated-fat_100g'] ?? 0) * f;
-
-                                return (
-                                    <>
-                                        <Text style={tw`text-platinum-gray mb-1`}>
-                                            Lif ({portion} {displayUnit}): {fiber.toFixed(1)} g
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-1`}>
-                                            Şeker ({portion} {displayUnit}): {sugars.toFixed(1)} g
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-1`}>
-                                            Sodyum ({portion} {displayUnit}): {sodium.toFixed(1)} g
-                                        </Text>
-                                        <Text style={tw`text-platinum-gray mb-4`}>
-                                            Doymuş Yağ ({portion} {displayUnit}): {satFat.toFixed(1)} g
-                                        </Text>
-                                    </>
-                                );
-                            })()}
-
-                            {/* 5.7) Close Button */}
-                            <Pressable
-                                onPress={() => {
-                                    setProduct(null);
-                                    setLoading(false);
-                                }}
-                                style={tw`mb-8`}
-                            >
-                                <Text style={tw`text-platinum-gray text-center`}>Kapat</Text>
-                            </Pressable>
-                        </ScrollView>
-                    )}
-                </SafeAreaView>
-            </Modal>
+            {/* Product Detail Modal */}
+            <FoodDetailModal
+                visible={loading || !!product}
+                loading={loading}
+                product={product}
+                onClose={handleModalClose}
+                onAddToTracker={handleAddToTracker}
+                onAddToFavorites={handleAddFavorite}
+            />
         </SafeAreaView>
     );
 }
