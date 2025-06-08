@@ -1,5 +1,3 @@
-// App.tsx
-
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,6 +20,9 @@ export default function App() {
 
     // 1) Uygulama açıldığında mevcut Supabase oturumunu kontrol et
     useEffect(() => {
+        // Uygulama her açıldığında, ne olursa olsun kayıt formunu temizle.
+        useAppStore.getState().resetRegistrationForm();
+
         (async () => {
             const {
                 data: { session },
