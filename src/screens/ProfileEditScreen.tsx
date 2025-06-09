@@ -10,80 +10,72 @@ import {
     Image,
     Alert,
     ActivityIndicator,
+    Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import i18n from '../i18n';
 import DeleteAccountSheet from '../components/DeleteAccountSheet';
 
+// 1. Arayüzü yeni şemaya göre güncelle: age -> date_of_birth, email kaldırıldı
 interface Profile {
     id: string;
     avatar_url: string | null;
     first_name: string | null;
     last_name: string | null;
     gender: string | null;
-    age: number | null;
-    email: string | null;
+    date_of_birth: string | null;
     account_type: string | null;
     weight_kg: number | null;
     height_cm: number | null;
     created_at: string;
 }
 
+
 export default function ProfileEditScreen() {
     const navigation = useNavigation();
-    const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
     // Form alanları için local state’ler
     const [firstName, setFirstName] = useState<string>('');
     const [lastName, setLastName] = useState<string>('');
     const [gender, setGender] = useState<string>('');
-    const [age, setAge] = useState<string>(''); // string olarak saklayıp Number’a çevireceğiz
     const [weight, setWeight] = useState<string>('');
     const [height, setHeight] = useState<string>('');
-    const [accountType, setAccountType] = useState<string>('');
-    // E-posta sadece gösteriliyor, değiştirme isterseniz Supabase Auth updateUser kullanmanız gerekir
-    const [email, setEmail] = useState<string>('');
+    const [userEmail, setUserEmail] = useState<string>('');
+    const [dateOfBirth, setDateOfBirth] = useState<Date>(new Date());
+    const [showPicker, setShowPicker] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
     const [showDel, setShowDel] = useState<boolean>(false);
 
-    // Kullanıcının UID’sini al
+
     const getUid = async () => (await supabase.auth.getUser()).data.user?.id;
 
     // Mount olduğunda mevcut profili çek, form alanlarını doldur
     useEffect(() => {
         (async () => {
             setLoading(true);
-            const {
-                data: { user },
-                error: authErr,
-            } = await supabase.auth.getUser();
-            if (authErr || !user) {
-                Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.');
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı.');
                 navigation.goBack();
                 return;
             }
 
-            // “profiles” tablosundan yeni sütunları çek
+            // E-postayı auth.user'dan al
+            setUserEmail(user.email ?? 'E-posta bulunamadı');
+
+            // 2. “profiles” tablosundan doğru sütunları çek
             const { data, error } = await supabase
                 .from<Profile>('profiles')
                 .select(`
-          id,
-          avatar_url,
-          first_name,
-          last_name,
-          gender,
-          age,
-          email,
-          account_type,
-          weight_kg,
-          height_cm,
-          created_at
-        `)
+                    id, avatar_url, first_name, last_name, gender,
+                    date_of_birth, account_type, weight_kg, height_cm, created_at
+                `)
                 .eq('id', user.id)
                 .single();
 
@@ -92,116 +84,153 @@ export default function ProfileEditScreen() {
                 Alert.alert('Hata', 'Profil bilgileri yüklenemedi.');
                 navigation.goBack();
             } else if (data) {
-                setProfile(data);
-
-                // State’leri doldur:
                 setFirstName(data.first_name ?? '');
                 setLastName(data.last_name ?? '');
                 setGender(data.gender ?? '');
-                setAge(data.age != null ? String(data.age) : '');
                 setWeight(data.weight_kg != null ? String(data.weight_kg) : '');
                 setHeight(data.height_cm != null ? String(data.height_cm) : '');
-                setAccountType(data.account_type ?? '');
-                setEmail(data.email ?? '');
                 setAvatarUrl(data.avatar_url);
+                // Gelen doğum tarihi string'ini Date objesine çevir
+                if (data.date_of_birth) {
+                    setDateOfBirth(new Date(data.date_of_birth));
+                }
             }
-
             setLoading(false);
         })();
     }, []);
 
+    const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+        setShowPicker(Platform.OS === 'ios'); // iOS'te açık kalmalı, Android'de kapanmalı
+        if (selectedDate) {
+            setDateOfBirth(selectedDate);
+        }
+    };
+
     // Avatar / Profil fotoğrafı seç & Supabase Storage’a yükleme
     const pickAvatar = async () => {
+        // Kullanıcıya seçenek sun
+        Alert.alert(
+            "Fotoğraf Ekle",
+            "Nereden bir fotoğraf seçmek istersiniz?",
+            [
+                {
+                    text: "Kamera",
+                    onPress: async () => {
+                        // Kamera izinlerini iste
+                        const permission = await ImagePicker.requestCameraPermissionsAsync();
+                        if (permission.granted === false) {
+                            Alert.alert("Hata", "Kamera kullanımı için izin vermeniz gerekiyor.");
+                            return;
+                        }
+                        const result = await ImagePicker.launchCameraAsync({
+                            quality: 0.7,
+                        });
+                        if (!result.canceled) {
+                            uploadAvatar(result.assets[0]);
+                        }
+                    },
+                },
+                {
+                    text: "Galeri",
+                    onPress: async () => {
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                            quality: 0.7,
+                        });
+                        if (!result.canceled) {
+                            uploadAvatar(result.assets[0]);
+                        }
+                    },
+                },
+                {
+                    text: "İptal",
+                    style: "cancel",
+                },
+            ]
+        );
+    };
+
+    // Yükleme mantığını ayrı bir fonksiyona taşıyalım
+    const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+        if (!asset.uri) return;
+
         try {
-            const res = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.7,
-            });
-            if (res.canceled) return;
-
-            const asset = res.assets[0];
-            if (!asset.uri) return;
-
             setUploadingAvatar(true);
             const uid = await getUid();
-            if (!uid) {
-                Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı.');
-                setUploadingAvatar(false);
-                return;
-            }
+            if (!uid) throw new Error('Kullanıcı oturumu bulunamadı.');
 
-            // Benzersiz bir isim oluştur: userId-timestamp.extension
             const fileExt = asset.uri.split('.').pop();
-            const fileName = `avatars/${uid}_${Date.now()}.${fileExt}`;
+            const fileName = `${Date.now()}.${fileExt}`; // Dosya adı sadece tarih olsun
+            const filePath = `${uid}/${fileName}`; // Dosya yolu "kullanici_id/dosya_adi.jpg" olsun
 
-            // Storage'a yükle
+
+            // Dosya yüklemek için FormData kullanmak en sağlam yöntemdir.
+            const formData = new FormData();
+            formData.append('file', {
+                uri: asset.uri,
+                name: fileName,
+                type: asset.mimeType ?? 'image/jpeg',
+            } as any);
+
+            // 1. Storage'a Yükleme
             const { error: uploadError } = await supabase.storage
-                .from('avatars') // "avatars" adında bir bucket olduğunu varsayıyoruz
-                .upload(fileName, {
-                    uri: asset.uri,
-                    name: fileName,
-                    type: asset.type ?? 'image/jpeg',
-                });
+                .from('avatars')
+                .upload(filePath, formData);
 
             if (uploadError) {
-                console.error('Avatar yükleme hatası:', uploadError.message);
-                Alert.alert('Hata', 'Avatar yüklenirken bir sorun oluştu.');
-                setUploadingAvatar(false);
-                return;
+                throw uploadError;
             }
 
-            // Public URL al
-            const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-            const publicUrl = publicData.publicUrl;
+            // 2. Yüklenen Dosyanın Public URL'ini Alma
+            const { data: urlData } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
 
-            // “profiles.avatar_url” alanını güncelle
-            const { error: updateErr } = await supabase
+            const publicUrl = urlData.publicUrl;
+
+            // 3. 'profiles' Tablosundaki 'avatar_url' Kolonunu Güncelleme
+            const { error: updateError } = await supabase
                 .from('profiles')
                 .update({ avatar_url: publicUrl })
                 .eq('id', uid);
 
-            if (updateErr) {
-                console.error('Avatar URL güncelleme hatası:', updateErr.message);
-                Alert.alert('Hata', 'Profil resmi güncellenemedi.');
-            } else {
-                setAvatarUrl(publicUrl);
+            if (updateError) {
+                throw updateError;
             }
-        } catch (err) {
-            console.error('Avatar seçme hatası:', err);
+
+            // 4. Arayüzdeki state'i güncelleme
+            setAvatarUrl(publicUrl);
+            Alert.alert("Başarılı", "Profil fotoğrafınız güncellendi.");
+
+        } catch (err: any) {
+            console.error("Avatar yükleme hatası:", err);
+            Alert.alert('Hata', err.message || 'Fotoğraf yüklenirken bir sorun oluştu.');
         } finally {
             setUploadingAvatar(false);
         }
     };
 
+
     // “Kaydet” işlemi: tüm alanları güncelle
     const save = async () => {
         const uid = await getUid();
-        if (!uid) {
-            Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı.');
-            return;
-        }
+        if (!uid) return;
 
-        // Zorunlu alanları kontrol edebilirsiniz. Örneğin isim boşsa uyar:
         if (!firstName.trim() || !lastName.trim()) {
             Alert.alert('Uyarı', 'Lütfen ad ve soyad girin.');
             return;
         }
 
-        // Numeric dönüşümleri
-        const ageNum = age ? Number(age) : null;
-        const weightNum = weight ? Number(weight) : null;
-        const heightNum = height ? Number(height) : null;
+        const genderToSave = gender ? gender.toLowerCase().trim() : null;
 
-        const updates: Partial<Omit<Profile, 'id' | 'created_at'>> = {
+        const updates = {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
-            gender: gender.trim() || null,
-            age: ageNum,
-            account_type: accountType.trim() || null,
-            weight_kg: weightNum,
-            height_cm: heightNum,
-            // Eğer e-posta güncellemesini de desteklemek isterseniz, aşağıdaki satırı kullanın
-            // email: email.trim() || null
+            gender: genderToSave,
+            weight_kg: weight ? Number(weight) : null,
+            height_cm: height ? Number(height) : null,
+            // Date objesini 'YYYY-MM-DD' formatına çevir
+            date_of_birth: dateOfBirth.toISOString().split('T')[0],
         };
 
         const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
@@ -215,11 +244,10 @@ export default function ProfileEditScreen() {
         }
     };
 
-    if (loading || !profile) {
+    if (loading) {
         return (
             <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}>
                 <ActivityIndicator size="large" color="#ffd700" />
-                <Text style={tw`text-platinum-gray mt-2`}>Profil yükleniyor...</Text>
             </SafeAreaView>
         );
     }
@@ -253,83 +281,85 @@ export default function ProfileEditScreen() {
                         {uploadingAvatar ? (
                             <ActivityIndicator color="#ffd700" />
                         ) : (
-                            <Text style={tw`text-accent-gold`}>Fotoğraf Seç</Text>
+                            <Text style={tw`text-accent-gold`}>Fotoğraf Ekle</Text>
                         )}
                     </Pressable>
                 </View>
 
-                {/* 2) Ad ve Soyad */}
+                {/* Düzeltilmiş Dikey Hizalama Stilleriyle Inputlar */}
                 <TextInput
-                    placeholder={i18n.t('firstName') || 'Ad'}
-                    placeholderTextColor="#666"
+                    placeholder="Ad"
                     value={firstName}
                     onChangeText={setFirstName}
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
                 />
-
                 <TextInput
-                    placeholder={i18n.t('lastName') || 'Soyad'}
-                    placeholderTextColor="#666"
+                    placeholder="Soyad"
                     value={lastName}
                     onChangeText={setLastName}
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
                 />
+                {/* Cinsiyet için TextInput yerine butonlar */}
+                <Text style={tw`text-slate-400 text-sm ml-1 mb-1 mt-3`}>Cinsiyet</Text>
+                <View style={tw`flex-row justify-between mb-3`}>
+                    <Pressable
+                        onPress={() => setGender('male')}
+                        style={[tw`flex-1 mr-1 rounded-lg p-3 border-2`, gender === 'male' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}
+                    >
+                        <Text style={tw`text-white text-center`}>Erkek</Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => setGender('female')}
+                        style={[tw`flex-1 ml-1 rounded-lg p-3 border-2`, gender === 'female' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}
+                    >
+                        <Text style={tw`text-white text-center`}>Kadın</Text>
+                    </Pressable>
+                </View>
 
-                {/* 3) Cinsiyet */}
                 <TextInput
-                    placeholder={i18n.t('gender') || 'Cinsiyet'}
-                    placeholderTextColor="#666"
-                    value={gender}
-                    onChangeText={setGender}
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
-                />
-
-                {/* 4) Yaş */}
-                <TextInput
-                    placeholder={i18n.t('age') || 'Yaş'}
-                    placeholderTextColor="#666"
-                    value={age}
-                    onChangeText={setAge}
-                    keyboardType="numeric"
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
-                />
-
-                {/* 5) E-Mail (pasif, güncelleme desteklemiyoruz) */}
-                <TextInput
-                    placeholder={i18n.t('email') || 'E-Mail'}
-                    placeholderTextColor="#666"
-                    value={email}
-                    editable={false}
-                    style={tw`border border-slate-gray bg-soft-black rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
-                />
-
-                {/* 6) Hesap Tipi */}
-                <TextInput
-                    placeholder={i18n.t('accountType') || 'Hesap Tipi'}
-                    placeholderTextColor="#666"
-                    value={accountType}
-                    onChangeText={setAccountType}
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
-                />
-
-                {/* 7) Kilo (kg) */}
-                <TextInput
-                    placeholder={i18n.t('weight') || 'Kilo (kg)'}
-                    placeholderTextColor="#666"
+                    placeholder="Kilo (kg)"
                     value={weight}
                     onChangeText={setWeight}
                     keyboardType="numeric"
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-3 text-platinum-gray`}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
                 />
-
-                {/* 8) Boy (cm) */}
                 <TextInput
-                    placeholder={i18n.t('height') || 'Boy (cm)'}
-                    placeholderTextColor="#666"
+                    placeholder="Boy (cm)"
                     value={height}
                     onChangeText={setHeight}
                     keyboardType="numeric"
-                    style={tw`border border-slate-gray rounded-lg px-3 py-2 mb-6 text-platinum-gray`}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-6 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
+                />
+
+                {/* 4. Yaş yerine Doğum Tarihi Düzenleyici */}
+                <Text style={tw`text-slate-400 text-sm ml-1 mb-1`}>Doğum Tarihi</Text>
+                <Pressable
+                    onPress={() => setShowPicker(true)}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, justifyContent: 'center'}]}
+                >
+                    <Text style={tw`text-platinum-gray`}>
+                        {dateOfBirth.toLocaleDateString('tr-TR')}
+                    </Text>
+                </Pressable>
+
+                {showPicker && (
+                    <DateTimePicker
+                        value={dateOfBirth}
+                        mode="date"
+                        // DEĞİŞİKLİK: 'spinner' yerine platforma özel en iyi görünümü kullan
+                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                        onChange={onDateChange}
+                        themeVariant="dark" // iOS için
+                        style={Platform.OS === 'ios' ? tw`h-80 w-full` : {}} // iOS için
+                    />
+                )}
+
+                {/* E-posta (düzenlenemez) */}
+                <Text style={tw`text-slate-400 text-sm ml-1 mb-1`}>E-posta (değiştirilemez)</Text>
+                <TextInput
+                    value={userEmail}
+                    editable={false}
+                    style={[tw`border border-slate-gray bg-soft-black rounded-lg px-3 mb-6 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
                 />
 
                 {/* 9) Kaydet Butonu */}

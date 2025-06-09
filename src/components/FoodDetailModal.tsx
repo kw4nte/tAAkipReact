@@ -24,6 +24,8 @@ type FoodDetailModalProps = {
     onClose: () => void;
     onAddToTracker: (portion: number, unit: 'g' | 'ml') => void;
     onAddToFavorites: () => void;
+    isFavorite?: boolean; // YENİ: Bu ürün favori mi?
+    onRemoveFromFavorites?: () => void; // YENİ: Favoriden çıkarma fonksiyonu
 };
 
 // Madde 3: Besin değerlerini gösterecek olan küçük kutu component'i
@@ -42,6 +44,8 @@ const FoodDetailModal = ({
                              onClose,
                              onAddToTracker,
                              onAddToFavorites,
+                             isFavorite, // YENİ
+                             onRemoveFromFavorites, // YENİ
                          }: FoodDetailModalProps) => {
     // Porsiyon state'leri artık bu component'in içinde
     const [portion, setPortion] = useState('100');
@@ -116,12 +120,23 @@ const FoodDetailModal = ({
 
                         {/* Madde 4: Yeni Buton Tasarımı */}
                         <View style={tw`flex-row justify-between mb-6`}>
-                            <Pressable
-                                onPress={onAddToFavorites}
-                                style={tw`border border-accent-gold py-3 rounded-lg w-[48%] items-center`}
-                            >
-                                <Text style={tw`text-accent-gold text-center font-medium`}>Favoriye Kaydet ⭐️</Text>
-                            </Pressable>
+                            {/* isFavorite prop'una göre butonu koşullu olarak render ediyoruz */}
+                            {isFavorite ? (
+                                <Pressable
+                                    onPress={onRemoveFromFavorites}
+                                    style={tw`border border-red-500 bg-red-500/20 py-3 rounded-lg w-[48%] items-center`}
+                                >
+                                    <Text style={tw`text-red-500 text-center font-medium`}>Favoriden Çıkar ❌</Text>
+                                </Pressable>
+                            ) : (
+                                <Pressable
+                                    onPress={onAddToFavorites}
+                                    style={tw`border border-accent-gold py-3 rounded-lg w-[48%] items-center`}
+                                >
+                                    <Text style={tw`text-accent-gold text-center font-medium`}>Favoriye Kaydet ⭐️</Text>
+                                </Pressable>
+                            )}
+
                             <Pressable
                                 onPress={onClose}
                                 style={tw`bg-slate-700 py-3 rounded-lg w-[48%] items-center`}

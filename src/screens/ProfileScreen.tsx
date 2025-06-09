@@ -8,24 +8,39 @@ import { supabase } from '../lib/supa';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAppStore } from '../store/useAppStore';
 
+// 1. Profile arayüzünü yeni veritabanı şemasına göre güncelleyelim
 interface Profile {
     id: string;
     avatar_url: string | null;
     first_name: string | null;
     last_name: string | null;
     gender: string | null;
-    age: number | null;
-    email: string | null;
+    date_of_birth: string | null;
     account_type: string | null;
     weight_kg: number | null;
     height_cm: number | null;
     created_at: string;
 }
 
+// 2. Doğum tarihinden yaş hesaplayan bir yardımcı fonksiyon ekleyelim
+const calculateAge = (dobString: string | null): number | null => {
+    if (!dobString) return null;
+    const birthDate = new Date(dobString);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDifference = today.getMonth() - birthDate.getMonth();
+    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+};
+
+
 export default function ProfileScreen() {
     const navigation = useNavigation();
     const logoutStore = useAppStore((s) => s.logout);
     const [profile, setProfile] = useState<Profile | null>(null);
+    const [userEmail, setUserEmail] = useState<string | null>(null); // 2. E-posta için ayrı state eklendi.
     const [loading, setLoading] = useState<boolean>(true);
     const isFocused = useIsFocused();
 
@@ -37,29 +52,31 @@ export default function ProfileScreen() {
                 data: { user },
                 error: authErr,
             } = await supabase.auth.getUser();
+
             if (authErr || !user) {
-                // Kullanıcı oturumu yoksa (örneğin zaman aşımına uğramışsa) anasayfaya veya login ekranına yönlendirebilirsiniz.
                 Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.');
                 logoutStore();
                 return;
             }
 
-            // "profiles" tablosundan yeni şemaya göre tüm gerekli alanları çektik:
+            // 3. E-postayı auth.user'dan alıp state'e kaydediyoruz.
+            setUserEmail(user.email ?? null);
+
+            // 4. Supabase sorgusundan 'email' kaldırıldı.
             const { data, error } = await supabase
-                .from<Profile>('profiles')
+                .from('profiles')
                 .select(`
-          id,
-          avatar_url,
-          first_name,
-          last_name,
-          gender,
-          age,
-          email,
-          account_type,
-          weight_kg,
-          height_cm,
-          created_at
-        `)
+                  id,
+                  avatar_url,
+                  first_name,
+                  last_name,
+                  gender,
+                  date_of_birth,
+                  account_type,
+                  weight_kg,
+                  height_cm,
+                  created_at
+                `)
                 .eq('id', user.id)
                 .single();
 
@@ -67,11 +84,12 @@ export default function ProfileScreen() {
                 console.error('Profil yükleme hatası:', error.message);
                 Alert.alert('Hata', 'Profil bilgileri yüklenemedi.');
             } else {
-                setProfile(data);
+                setProfile(data as Profile);
             }
             setLoading(false);
         })();
     }, [isFocused]);
+
 
     const signOut = async () => {
         const { error } = await supabase.auth.signOut();
@@ -108,6 +126,8 @@ export default function ProfileScreen() {
     // fullName oluştur
     const fullName = `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim();
 
+    const userAge = calculateAge(profile.date_of_birth);
+
     return (
         <SafeAreaView style={tw`flex-1 bg-premium-black justify-start items-center p-4`}>
             {/* 1) Profil Fotoğrafı */}
@@ -132,7 +152,7 @@ export default function ProfileScreen() {
 
             {/* 3) E-mail */}
             <Text style={tw`text-platinum-gray text-base mb-4`}>
-                {profile.email ?? ''}
+                {userEmail ?? ''}
             </Text>
 
             {/* 4) Diğer Profil Bilgileri: */}
@@ -152,7 +172,7 @@ export default function ProfileScreen() {
                 {/* Yaş */}
                 <View style={tw`flex-row mb-2`}>
                     <Text style={tw`text-accent-gold w-32`}>Yaş:</Text>
-                    <Text style={tw`text-platinum-gray`}>{profile.age != null ? profile.age : '-'}</Text>
+                    <Text style={tw`text-platinum-gray`}>{userAge != null ? userAge : '-'}</Text>
                 </View>
 
                 {/* Kilo */}
@@ -171,15 +191,6 @@ export default function ProfileScreen() {
                     </Text>
                 </View>
 
-                {/* Hesap Oluşturulma Tarihi */}
-                <View style={tw`flex-row mb-2`}>
-                    <Text style={tw`text-accent-gold w-32`}>Oluşturulma:</Text>
-                    <Text style={tw`text-platinum-gray`}>
-                        {profile.created_at
-                            ? new Date(profile.created_at).toLocaleDateString()
-                            : '-'}
-                    </Text>
-                </View>
             </View>
 
             {/* 5) Profili Düzenle Butonu */}

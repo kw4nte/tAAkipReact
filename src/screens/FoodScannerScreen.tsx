@@ -72,44 +72,46 @@ export default function FoodScannerScreen() {
     };
 
 
+    // handleFetch fonksiyonunu bulun ve içeriğini güncelleyin
     const handleFetch = async (code: string) => {
-        if (!code.trim()) {
-            // isScanningRef'i burada sıfırlamaya gerek yok, çünkü tarama moduna girerken sıfırlanıyor.
-            return;
-        }
-
+        if (!code.trim()) return;
         setLoading(true);
-        setMode('idle'); // Tarama sonrası kamerayı hemen kapat
+        setMode('idle');
 
         try {
             const fetched = await fetchProduct(code.trim());
-
             if (!fetched) {
                 Alert.alert('Ürün Bulunamadı', 'Bu barkoda ait ürün bulunamadı.');
-                // 'finally' bloğu çalıştığı için burada setLoading(false) demeye gerek yok.
                 return;
             }
-
             setProduct(fetched);
 
             const uid = await getUid();
             if (uid) {
+                // --- YENİ EKLENEN BÖLÜM ---
+                // Ürün bilgilerini kendi 'products' tablomuza da kaydedelim.
+                // upsert: kayıt varsa günceller, yoksa yeni kayıt oluşturur.
+                const { error: upsertError } = await supabase.from('products').upsert({
+                    code: fetched.code,
+                    name: fetched.product_name,
+                    // Diğer ürün detaylarını da buraya ekleyebilirsiniz (image_url vs.)
+                });
+                if (upsertError) console.error('Product upsert error:', upsertError.message);
+                // --- YENİ BÖLÜM SONU ---
+
+
                 const { error: insertErr } = await supabase.from('scan_history').insert({
                     user_id: uid,
                     product_code: code.trim(),
                     product_name: fetched.product_name || 'İsimsiz Ürün',
                 });
-                if (insertErr) {
-                    console.error('History insert error:', insertErr.message);
-                } else {
-                    await loadHistory();
-                }
+                if (insertErr) console.error('History insert error:', insertErr.message);
+                else await loadHistory();
             }
         } catch (error) {
             console.error("handleFetch error:", error);
             Alert.alert("Hata", "Ürün bilgisi alınırken bir sorun oluştu.");
         } finally {
-            // Bu blok, yukarıdaki işlemler başarılı da olsa hata da verse HER ZAMAN çalışır.
             setLoading(false);
         }
     };
