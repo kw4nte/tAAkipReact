@@ -10,6 +10,8 @@ import {
     Pressable,
     RefreshControl,
     Alert,
+    TouchableWithoutFeedback,
+    Keyboard,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import tw from '../theme/tw';
@@ -144,6 +146,7 @@ export default function CalorieTrackerScreen() {
     }, [loadMeals, loadWater]);
 
     return (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <SafeAreaView style={tw`flex-1 bg-premium-black`}>
             {/* Üst kısım: su toplamı, su ekleme inputu ve butonlar */}
             <View style={tw`p-4 border-b border-slate-gray`}>
@@ -215,5 +218,7 @@ export default function CalorieTrackerScreen() {
                 />
             )}
         </SafeAreaView>
+</TouchableWithoutFeedback>
+
     );
 }

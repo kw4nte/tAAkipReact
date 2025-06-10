@@ -8,7 +8,6 @@ import FitnessScreen from '../screens/FitnessScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import FavoriteFoodsScreen from "../screens/FavoriteFoodsScreen";
 import PostComposerScreen from "../screens/PostComposerScreen";
-import PostDetailScreen from "../screens/PostDetailScreen";
 import ProfileEditScreen from "../screens/ProfileEditScreen";
 import { useThemeColors } from '../theme/ThemeProvider';
 
@@ -28,11 +27,6 @@ function FeedStack() {
                 name="PostComposer"
                 component={PostComposerScreen}
                 options={{ headerShown: true, title: 'Gönderi Oluştur' }}
-            />
-            <Stack.Screen
-                name="PostDetail"
-                component={PostDetailScreen}
-                options={{ headerShown: true, title: 'Gönderi' }}
             />
         </Stack.Navigator>
     );
