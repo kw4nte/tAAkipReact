@@ -63,6 +63,13 @@ export default function RegistrationPasswordScreen() {
             return;
         }
 
+        const { error: invokeError } = await supabase.functions.invoke('calculate-user-metrics');
+        if (invokeError) {
+            // Bu hatayı kullanıcıya göstermek zorunda değiliz,
+            // arka planda loglayabiliriz. Profil zaten oluşturuldu.
+            console.error('Initial calorie calculation failed:', invokeError.message);
+        }
+
         resetRegistrationForm();
         setLoading(false);
         Alert.alert(

@@ -51,6 +51,7 @@ export default function ProfileEditScreen() {
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
     const [showDel, setShowDel] = useState<boolean>(false);
+    const [activityLevel, setActivityLevel] = useState<string>('');
 
 
     const getUid = async () => (await supabase.auth.getUser()).data.user?.id;
@@ -90,6 +91,7 @@ export default function ProfileEditScreen() {
                 setWeight(data.weight_kg != null ? String(data.weight_kg) : '');
                 setHeight(data.height_cm != null ? String(data.height_cm) : '');
                 setAvatarUrl(data.avatar_url);
+                setActivityLevel(data.activity_level ?? '');
                 // Gelen doğum tarihi string'ini Date objesine çevir
                 if (data.date_of_birth) {
                     setDateOfBirth(new Date(data.date_of_birth));
@@ -239,6 +241,7 @@ export default function ProfileEditScreen() {
             console.error('Profil güncelleme hatası:', error.message);
             Alert.alert('Hata', 'Profil güncelleme işlemi başarısız oldu.');
         } else {
+            await supabase.functions.invoke('calculate-user-metrics');
             Alert.alert('Başarılı', 'Profiliniz başarıyla güncellendi.');
             navigation.goBack();
         }
@@ -330,6 +333,15 @@ export default function ProfileEditScreen() {
                     keyboardType="numeric"
                     style={[tw`border border-slate-gray rounded-lg px-3 mb-6 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
                 />
+
+                {/* YENİ: Aktivite Seviyesi Seçimi */}
+                <Text style={tw`text-slate-400 text-sm ml-1 mb-1 mt-3`}>Aktivite Seviyesi</Text>
+                <View style={tw`flex-col mb-3`}>
+                    <Pressable onPress={() => setActivityLevel('sedentary')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, activityLevel === 'sedentary' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Masa başı / Hareketsiz</Text></Pressable>
+                    <Pressable onPress={() => setActivityLevel('light')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, activityLevel === 'light' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Az Hareketli / Hafif Egzersiz</Text></Pressable>
+                    <Pressable onPress={() => setActivityLevel('moderate')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, activityLevel === 'moderate' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Orta Derecede Hareketli</Text></Pressable>
+                    <Pressable onPress={() => setActivityLevel('active')} style={[tw`w-full p-3 border-2 rounded-lg`, activityLevel === 'active' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Çok Aktif</Text></Pressable>
+                </View>
 
                 {/* 4. Yaş yerine Doğum Tarihi Düzenleyici */}
                 <Text style={tw`text-slate-400 text-sm ml-1 mb-1`}>Doğum Tarihi</Text>

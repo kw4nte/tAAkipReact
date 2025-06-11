@@ -54,6 +54,9 @@ interface AppState {
     // YENİ EKLENEN KAYIT FORMU STATE'İ
     registrationForm: RegistrationFormState;
 
+    selectedDate: string;
+    setSelectedDate: (date: string) => void;
+
     // Mevcut aksiyonlar
     login: () => void;
     logout: () => void;
@@ -108,6 +111,11 @@ export const useAppStore = create<AppState>()(
             // --- YENİ EKLENENLER ---
             // Kayıt formu state'ini ve başlangıç değerini ekliyoruz.
             registrationForm: initialFormState,
+
+
+            selectedDate: new Date().toISOString().split('T')[0], // Başlangıçta bugünü tutar
+            setSelectedDate: (date) => set({ selectedDate: date }), // Tarihi güncelleyen fonksiyon
+
 
             // Kayıt formunun bir alanını güncellemek için aksiyon.
             setRegistrationFormField: (field, value) =>

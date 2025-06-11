@@ -11,9 +11,10 @@ import {
     Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
+import { useAppStore } from '../store/useAppStore';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
-import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import tw from '../theme/tw';
 import { fetchProduct, Product } from '../services/openFoodApi';
@@ -27,6 +28,7 @@ interface ScanHistoryItem {
 }
 
 export default function FoodScannerScreen() {
+    const selectedDate = useAppStore((s) => s.selectedDate);
     const [permission, requestPermission] = useCameraPermissions();
     const [mode, setMode] = useState<'idle' | 'scan' | 'manual'>('idle');
     const [input, setInput] = useState('');
@@ -118,22 +120,29 @@ export default function FoodScannerScreen() {
 
 
     const handleAddToTracker = async (portion: number, unit: 'g' | 'ml') => {
-        if (!product) return;
+        console.log('1. Öğüne ekleme fonksiyonu tetiklendi.'); // DEBUG
+        if (!product) {
+            console.log('HATA: Ürün bulunamadı (product state is null).'); // DEBUG
+            return;
+        }
 
-        // 1. İşlem başlarken yüklemeyi başlat
         setLoading(true);
 
         const uid = await getUid();
         if (!uid) {
             Alert.alert('Hata', 'Kullanıcı bulunamadı.');
-            setLoading(false); // Hata durumunda yüklemeyi bitir
+            setLoading(false);
             return;
         }
+
+        const eatenAtDate = selectedDate ? new Date(selectedDate) : new Date();
+
+        console.log(`2. Öğün şu tarihe eklenecek: ${eatenAtDate.toISOString()}`); // DEBUG
 
         const n = product.nutriments;
         const factor = portion / 100;
 
-        const { error } = await supabase.from('meals').insert({
+        const mealData = {
             user_id: uid,
             food_name: product.product_name || 'Ürün',
             calories: Math.round((n['energy-kcal_100g'] ?? 0) * factor),
@@ -142,17 +151,23 @@ export default function FoodScannerScreen() {
             fat: (n.fat_100g ?? 0) * factor,
             quantity: portion,
             unit: unit,
-        });
+            eaten_at: eatenAtDate.toISOString(),
+        };
 
-        // 2. İşlem bittiğinde, sonuç ne olursa olsun yüklemeyi bitir
+        console.log('3. Supabase\'e gönderilecek veri:', mealData); // DEBUG
+
+        const { error } = await supabase.from('meals').insert(mealData);
+
+
         setLoading(false);
 
         if (error) {
-            console.error('Add to tracker error:', error.message);
-            Alert.alert('Hata', 'Öğün eklenemedi.');
+            console.error('Add to tracker error:', error.message); // DEBUG
+            Alert.alert('Hata', `Öğün eklenemedi. Hata: ${error.message}`);
         } else {
+            console.log('4. Öğün başarıyla eklendi.'); // DEBUG
             Alert.alert('Başarılı', 'Öğün kaydedildi.');
-            setProduct(null); // Başarılı eklemeden sonra modal'ı kapat
+            setProduct(null);
         }
     };
 
