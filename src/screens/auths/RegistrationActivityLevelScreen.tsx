@@ -32,7 +32,7 @@ export default function RegistrationActivityLevelScreen() {
         }
         setRegistrationFormField('activityLevel', localActivityLevel);
 
-        navigation.navigate('RegistrationEmail' as never);
+        navigation.navigate('RegistrationUsername' as never);
     };
 
     useLayoutEffect(() => {

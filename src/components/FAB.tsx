@@ -1,5 +1,6 @@
 import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import tw from "../theme/tw";
 
 export default function FAB({ onPress }) {
     return (
@@ -12,7 +13,7 @@ export default function FAB({ onPress }) {
                 width: 56,
                 height: 56,
                 borderRadius: 28,
-                backgroundColor: '#bfa76f',
+                backgroundColor: '#FFD700',
                 alignItems: 'center',
                 justifyContent: 'center',
                 shadowColor: '#000',
@@ -21,7 +22,7 @@ export default function FAB({ onPress }) {
                 elevation: 5,
             }}
         >
-            <Ionicons name="add" size={32} color="#0d0d0d" />
+            <Ionicons name="add" size={32} color={tw.color('premium-black')} />
         </Pressable>
     );
 }

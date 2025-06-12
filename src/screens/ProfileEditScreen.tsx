@@ -52,6 +52,8 @@ export default function ProfileEditScreen() {
     const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
     const [showDel, setShowDel] = useState<boolean>(false);
     const [activityLevel, setActivityLevel] = useState<string>('');
+    const [username, setUsername] = useState<string>('');
+    const [originalUsername, setOriginalUsername] = useState<string>('');
 
 
     const getUid = async () => (await supabase.auth.getUser()).data.user?.id;
@@ -72,10 +74,11 @@ export default function ProfileEditScreen() {
 
             // 2. “profiles” tablosundan doğru sütunları çek
             const { data, error } = await supabase
-                .from<Profile>('profiles')
+                .from('profiles')
                 .select(`
-                    id, avatar_url, first_name, last_name, gender,
-                    date_of_birth, account_type, weight_kg, height_cm, created_at
+        id, avatar_url, first_name, last_name, gender,
+        date_of_birth, account_type, weight_kg, height_cm, created_at,
+        username, activity_level
                 `)
                 .eq('id', user.id)
                 .single();
@@ -92,6 +95,8 @@ export default function ProfileEditScreen() {
                 setHeight(data.height_cm != null ? String(data.height_cm) : '');
                 setAvatarUrl(data.avatar_url);
                 setActivityLevel(data.activity_level ?? '');
+                setUsername(data.username ?? '');
+                setOriginalUsername(data.username ?? '');
                 // Gelen doğum tarihi string'ini Date objesine çevir
                 if (data.date_of_birth) {
                     setDateOfBirth(new Date(data.date_of_birth));
@@ -218,9 +223,38 @@ export default function ProfileEditScreen() {
         const uid = await getUid();
         if (!uid) return;
 
+        const newUsername = username.trim();
+
         if (!firstName.trim() || !lastName.trim()) {
             Alert.alert('Uyarı', 'Lütfen ad ve soyad girin.');
             return;
+        }
+
+        if (newUsername.length < 3) {
+            Alert.alert('Uyarı', 'Kullanıcı adı en az 3 karakter olmalıdır.');
+            return;
+        }
+
+        setLoading(true);
+
+        if (newUsername !== originalUsername) {
+            const { data: existingUser, error: checkError } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('username', newUsername)
+                .single();
+
+            if (checkError && checkError.code !== 'PGRST116') {
+                setLoading(false);
+                Alert.alert('Hata', 'Kullanıcı adı kontrol edilirken bir sorun oluştu.');
+                return;
+            }
+
+            if (existingUser) {
+                setLoading(false);
+                Alert.alert('Kullanıcı Adı Alınmış', 'Bu kullanıcı adı başkası tarafından kullanılıyor. Lütfen farklı bir tane seçin.');
+                return;
+            }
         }
 
         const genderToSave = gender ? gender.toLowerCase().trim() : null;
@@ -228,10 +262,10 @@ export default function ProfileEditScreen() {
         const updates = {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
+            username: newUsername,
             gender: genderToSave,
             weight_kg: weight ? Number(weight) : null,
             height_cm: height ? Number(height) : null,
-            // Date objesini 'YYYY-MM-DD' formatına çevir
             date_of_birth: dateOfBirth.toISOString().split('T')[0],
         };
 
@@ -243,6 +277,7 @@ export default function ProfileEditScreen() {
         } else {
             await supabase.functions.invoke('calculate-user-metrics');
             Alert.alert('Başarılı', 'Profiliniz başarıyla güncellendi.');
+            setOriginalUsername(newUsername);
             navigation.goBack();
         }
     };
@@ -301,6 +336,13 @@ export default function ProfileEditScreen() {
                     value={lastName}
                     onChangeText={setLastName}
                     style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
+                />
+                <TextInput
+                    placeholder="Kullanıcı Adı"
+                    value={username}
+                    onChangeText={(text) => setUsername(text.toLowerCase())}
+                    style={[tw`border border-slate-gray rounded-lg px-3 mb-3 text-platinum-gray`, {height: 50, textAlignVertical: 'center'}]}
+                    autoCapitalize="none"
                 />
                 {/* Cinsiyet için TextInput yerine butonlar */}
                 <Text style={tw`text-slate-400 text-sm ml-1 mb-1 mt-3`}>Cinsiyet</Text>

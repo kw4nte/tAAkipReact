@@ -45,6 +45,7 @@ export default function RegistrationPasswordScreen() {
             id: authData.user.id,
             first_name: registrationForm.firstName,
             last_name: registrationForm.lastName,
+            username: registrationForm.username,
             date_of_birth: registrationForm.dateOfBirth,
             gender: registrationForm.gender,
             weight_kg: Number(registrationForm.weight),

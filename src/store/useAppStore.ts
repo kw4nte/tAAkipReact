@@ -80,6 +80,7 @@ const initialFormState: RegistrationFormState = {
     height: '',
     goal: '',
     activityLevel: '',
+    username: '',
     email: '',
     password: '',
 };

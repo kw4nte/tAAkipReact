@@ -9,6 +9,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import FavoriteFoodsScreen from "../screens/FavoriteFoodsScreen";
 import PostComposerScreen from "../screens/PostComposerScreen";
 import ProfileEditScreen from "../screens/ProfileEditScreen";
+import UserProfileScreen from '../screens/UserProfileScreen';
 import { useThemeColors } from '../theme/ThemeProvider';
 
 const Tab = createBottomTabNavigator();
@@ -28,6 +29,10 @@ function FeedStack() {
                 component={PostComposerScreen}
                 options={{ headerShown: true, title: 'Gönderi Oluştur' }}
             />
+            <Stack.Screen
+                name="UserProfile"
+                component={UserProfileScreen}
+                options={{ headerShown: true, title: '' }} />
         </Stack.Navigator>
     );
 }
@@ -45,6 +50,7 @@ function CalorieStack() {
                 component={FavoriteFoodsScreen}
                 options={{ headerShown: true, title: 'Favoriler' }}
             />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
         </Stack.Navigator>
     );
 }
@@ -53,6 +59,7 @@ function ScannerStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="ScannerMain" component={FoodScannerScreen} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
         </Stack.Navigator>
     );
 }
@@ -60,6 +67,7 @@ function FitnessStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="FitnessMain" component={FitnessScreen} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
         </Stack.Navigator>
     );
 }
@@ -69,6 +77,7 @@ function ProfileStack() {
             <Stack.Screen name="ProfileMain" component={ProfileScreen} />
             <Stack.Screen name="ProfileEdit" component={ProfileEditScreen}
                           options={{ headerShown:true, title:'Profil' }} />
+            <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
         </Stack.Navigator>
     );
 }

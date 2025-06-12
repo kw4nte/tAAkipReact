@@ -14,6 +14,7 @@ import RegistrationGoalScreen from '../screens/auths/RegistrationGoalScreen';
 import RegistrationActivityLevelScreen from '../screens/auths/RegistrationActivityLevelScreen';
 import RegistrationEmailScreen from '../screens/auths/RegistrationEmailScreen';
 import RegistrationPasswordScreen from '../screens/auths/RegistrationPasswordScreen';
+import RegistrationUsernameScreen from '../screens/auths/RegistrationUsernameScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -39,6 +40,7 @@ export default function AuthStack() {
             <Stack.Screen name="RegistrationActivityLevel" component={RegistrationActivityLevelScreen} />
             <Stack.Screen name="RegistrationEmail" component={RegistrationEmailScreen} />
             <Stack.Screen name="RegistrationPassword" component={RegistrationPasswordScreen} />
+            <Stack.Screen name="RegistrationUsername" component={RegistrationUsernameScreen} />
         </Stack.Navigator>
     );
 }
