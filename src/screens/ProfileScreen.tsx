@@ -22,6 +22,7 @@ export default function ProfileScreen() {
     const [followingCount, setFollowingCount] = useState(0);
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activePost, setActivePost] = useState<{ id: number; ownerId: string } | null>(null);
 
     // ProfileScreen.tsx içinde
 
@@ -78,10 +79,13 @@ export default function ProfileScreen() {
         return <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}><ActivityIndicator color={tw.color('accent-gold')} /></SafeAreaView>;
     }
 
-    const toggleLike = async (postId: number) => {
-        // Bu fonksiyon FeedScreen'den kopyalandı ve bu ekrana uyarlandı
+
+
+    const handleToggleLike = async (postId: number) => {
+        // Giriş yapmış kullanıcı bilgisi (userProfile) store'dan geldiği için kontrol edelim.
         if (!userProfile) return;
 
+        // Optimistic Update için önce yerel state'i anında güncelleyelim
         const postToUpdate = posts.find(p => p.id === postId);
         if (!postToUpdate) return;
 
@@ -94,9 +98,12 @@ export default function ProfileScreen() {
             )
         );
 
+        // Arka planda Supabase veritabanını güncelleyelim
         if (currentlyLiked) {
+            // Beğeniyi geri al
             await supabase.from('likes').delete().match({ post_id: postId, user_id: userProfile.id });
         } else {
+            // Yeni beğeni ekle
             await supabase.from('likes').insert({ post_id: postId, user_id: userProfile.id });
         }
     };
