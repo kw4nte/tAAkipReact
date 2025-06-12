@@ -1,150 +1,107 @@
-// src/screens/ProfileScreen.tsx
-import { useEffect, useState } from 'react';
+// src/screens/ProfileScreen.tsx (Nihai Sürüm)
+
+import { useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, View, Image, Pressable, Alert, FlatList, ActivityIndicator } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { Text, View, Image, Pressable, FlatList, ActivityIndicator } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
-import PrimaryButton from '../components/PrimaryButton';
 import { useAppStore } from '../store/useAppStore';
+import PostItem from '../components/PostItem'; // Yeni PostItem bileşenini import ediyoruz
 
-// 1. Profile arayüzünü yeni veritabanı şemasına göre güncelleyelim
-interface Profile {
-    id: string;
-    avatar_url: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    gender: string | null;
-    date_of_birth: string | null;
-    account_type: string | null;
-    weight_kg: number | null;
-    height_cm: number | null;
-    created_at: string;
-    username: string | null;
-}
 
-// 2. Doğum tarihinden yaş hesaplayan bir yardımcı fonksiyon ekleyelim
-const calculateAge = (dobString: string | null): number | null => {
-    if (!dobString) return null;
-    const birthDate = new Date(dobString);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDifference = today.getMonth() - birthDate.getMonth();
-    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-};
-
+interface Post { id: number; user_id: string; content: string; media_url: string | null; created_at: string; }
 
 export default function ProfileScreen() {
     const navigation = useNavigation();
     const logoutStore = useAppStore((s) => s.logout);
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [userEmail, setUserEmail] = useState<string | null>(null); // 2. E-posta için ayrı state eklendi.
-    const [loading, setLoading] = useState<boolean>(true);
-    const isFocused = useIsFocused();
+    const userProfile = useAppStore((s) => s.userProfile);
+
     const [followerCount, setFollowerCount] = useState(0);
     const [followingCount, setFollowingCount] = useState(0);
     const [posts, setPosts] = useState<Post[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // src/screens/ProfileScreen.tsx
+    // ProfileScreen.tsx içinde
 
-// Lütfen mevcut useEffect bloğunuzu aşağıdaki daha sağlam versiyonuyla değiştirin.
-    useEffect(() => {
-        if (!isFocused) return;
-
-        // Referans hatasını önlemek için kendi kendini çağıran async fonksiyon kullanalım
-        (async () => {
+    const fetchData = useCallback(async () => {
+        if (!userProfile) {
+            // Profil bilgisi henüz global state'de yoksa, ilk yükleme için loading göster
+            // App.tsx'teki fetch bunu halledecek, ama bir güvenlik katmanı olarak kalabilir.
             setLoading(true);
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (!user) {
-                Alert.alert('Hata', 'Kullanıcı oturumu bulunamadı.');
-                const { data: postData } = await supabase.from('posts').select('*').eq('user_id', user.id).order('created_at', { descending: true });
-                setPosts(postData ?? []);
-                logoutStore();
-                setLoading(false);
-                return;
-            }
-
-            console.log(`======== ProfileScreen Veri Çekme Başladı ========`);
-            console.log(`Profil verisi şu kullanıcı için çekiliyor: ${user.email} (ID: ${user.id})`);
-
-
-            setUserEmail(user.email ?? null);
-
-            // 1. Profil bilgilerini ve kullanıcı adını çek
-            const { data, error } = await supabase
-                .from('profiles')
-                .select(`*, username`)
-                .eq('id', user.id)
-                .single();
-
-            if (error) {
-                console.error('Profil yükleme hatası:', error.message);
-                Alert.alert('Hata', 'Profil bilgileri yüklenemedi.');
-                setLoading(false);
-                return;
-            }
-
-            setProfile(data as Profile);
-
-            // 2. Takipçi sayısını çek
-            console.log(`Takipçi sayısı sorgusu: "following_id" = ${user.id} olanları say`);
-            const { count: followers } = await supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', user.id);
-            console.log(`==> Dönen takipçi sayısı: ${followers}`);
-            setFollowerCount(followers ?? 0);
-
-            // 3. Takip edilen sayısını çek
-            console.log(`Takip edilen sayısı sorgusu: "follower_id" = ${user.id} olanları say`);
-            const { count: following } = await supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', user.id);
-            console.log(`==> Dönen takip edilen sayısı: ${following}`);
-            setFollowingCount(following ?? 0);
-
-            setLoading(false);
-            console.log(`======== ProfileScreen Veri Çekme Bitti ========`);
-        })(); // Bu parantezler fonksiyonu hemen çalıştırır.
-
-    }, [isFocused, logoutStore]);
-
-
-    const signOut = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            console.error('Çıkış hatası:', error.message);
-            Alert.alert('Hata', 'Çıkış yapılırken bir sorun oluştu.');
             return;
-        }
+        };
+
+        // Bu fonksiyonun geri kalanı aynı...
+        const followersPromise = supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', userProfile.id);
+        const followingPromise = supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', userProfile.id);
+        const postsPromise = supabase.rpc('get_posts_for_user', { profile_id: userProfile.id });
+
+        // setLoading(true) burada olmalı
+        setLoading(true);
+        const [{ count: followers }, { count: following }, { data: postData }] = await Promise.all([followersPromise, followingPromise, postsPromise]);
+
+        setFollowerCount(followers ?? 0);
+        setFollowingCount(following ?? 0);
+        setPosts(postData ?? []);
+        setLoading(false);
+    }, [userProfile]);
+
+    // DÜZELTİLMİŞ KULLANIM
+    useFocusEffect(
+        useCallback(() => {
+            // Bu yapı, effect'in kendisinin async olmasını engeller
+            fetchData();
+        }, [fetchData])
+    );
+
+    const signOut = () => {
+        supabase.auth.signOut();
         logoutStore();
     };
 
-    if (loading) {
-        return (
-            <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}>
-                <Text style={tw`text-platinum-gray text-lg`}>Profil bilgileri yükleniyor...</Text>
-            </SafeAreaView>
-        );
+    const navigateToUserProfile = (profileId: string) => {
+        // Kullanıcı kendi profilindeyken kendi ismine tıklarsa bir şey yapma
+        if (profileId === userProfile?.id) {
+            return;
+        }
+        // Başka bir profile gitmek için 'push' kullanılır
+        navigation.dispatch({ type: 'PUSH', payload: { name: 'UserProfile', params: { userId: profileId } } });
+    };
+
+    const handleDeletePost = (deletedPostId: number) => {
+        setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
+    };
+
+    if (loading || !userProfile) {
+        return <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}><ActivityIndicator color={tw.color('accent-gold')} /></SafeAreaView>;
     }
 
-    // Eğer profile null ise:
-    if (!profile) {
-        return (
-            <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center p-4`}>
-                <Text style={tw`text-platinum-gray text-lg mb-4`}>
-                    Profil bulunamadı. Lütfen tekrar deneyin.
-                </Text>
-                <PrimaryButton onPress={() => navigation.navigate('Login' as never)}>
-                    Giriş Yap
-                </PrimaryButton>
-            </SafeAreaView>
+    const toggleLike = async (postId: number) => {
+        // Bu fonksiyon FeedScreen'den kopyalandı ve bu ekrana uyarlandı
+        if (!userProfile) return;
+
+        const postToUpdate = posts.find(p => p.id === postId);
+        if (!postToUpdate) return;
+
+        const currentlyLiked = postToUpdate.is_liked_by_user;
+        const newLikeCount = currentlyLiked ? postToUpdate.likes_count - 1 : postToUpdate.likes_count + 1;
+
+        setPosts(currentPosts =>
+            currentPosts.map(p =>
+                p.id === postId ? { ...p, is_liked_by_user: !currentlyLiked, likes_count: newLikeCount } : p
+            )
         );
-    }
 
-    // fullName oluştur
-    const fullName = `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim();
+        if (currentlyLiked) {
+            await supabase.from('likes').delete().match({ post_id: postId, user_id: userProfile.id });
+        } else {
+            await supabase.from('likes').insert({ post_id: postId, user_id: userProfile.id });
+        }
+    };
 
-    const userAge = calculateAge(profile.date_of_birth);
+    const fullName = `${userProfile.first_name ?? ''} ${userProfile.last_name ?? ''}`.trim();
 
     return (
         <SafeAreaView style={tw`flex-1 bg-premium-black`}>
@@ -152,89 +109,55 @@ export default function ProfileScreen() {
                 data={posts}
                 keyExtractor={(item) => item.id.toString()}
                 showsVerticalScrollIndicator={false}
-
-                // Listenin en üstünde görünecek olan profil bilgileri
                 ListHeaderComponent={
                     <>
-                        <View style={tw`items-center p-4`}>
-                            {/* Profil Fotoğrafı */}
-                            <View style={tw`mb-6`}>
-                                {profile.avatar_url ? (
-                                    <Image
-                                        source={{ uri: profile.avatar_url }}
-                                        style={tw`w-32 h-32 rounded-full`}
-                                        resizeMode="cover"
-                                    />
-                                ) : (
-                                    <View style={tw`w-32 h-32 rounded-full bg-slate-gray justify-center items-center`}>
-                                        <Text style={tw`text-platinum-gray`}>Fotoğraf Yok</Text>
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* İsim ve Kullanıcı Adı */}
-                            <Text style={tw`text-accent-gold text-2xl mb-1`}>
-                                {fullName || 'Kullanıcı İsmi'}
-                            </Text>
-                            <Text style={tw`text-slate-400 text-lg mb-4`}>
-                                @{profile.username ?? ''}
-                            </Text>
-
-                            {/* İstatistikler */}
-                            <View style={tw`flex-row justify-around w-full mb-6 border-y border-slate-700 py-4`}>
-                                <View style={tw`items-center`}>
-                                    <Text style={tw`text-white font-bold text-xl`}>{posts.length}</Text>
-                                    <Text style={tw`text-slate-400`}>Gönderi</Text>
-                                </View>
-                                <View style={tw`items-center`}>
-                                    <Text style={tw`text-white font-bold text-xl`}>{followerCount}</Text>
-                                    <Text style={tw`text-slate-400`}>Takipçi</Text>
-                                </View>
-                                <View style={tw`items-center`}>
-                                    <Text style={tw`text-white font-bold text-xl`}>{followingCount}</Text>
-                                    <Text style={tw`text-slate-400`}>Takip</Text>
-                                </View>
-                            </View>
-
-                            {/* Butonlar */}
-                            <Pressable
-                                onPress={() => navigation.navigate('ProfileEdit' as never)}
-                                style={tw`bg-soft-black px-6 py-3 rounded-lg w-full mb-4`}
-                            >
-                                <Text style={tw`text-accent-gold text-center font-medium`}>Profili Düzenle</Text>
+                        <View style={tw`flex-row justify-between items-center p-4`}>
+                            <Pressable onPress={signOut} style={tw`p-1`}>
+                                <Ionicons name="log-out-outline" size={28} color={tw.color('slate-400')} />
                             </Pressable>
-                            <PrimaryButton onPress={signOut} style={tw`w-full`}>
-                                Çıkış Yap
-                            </PrimaryButton>
+                            <Pressable onPress={() => navigation.navigate('ProfileEdit' as never)} style={tw`p-1`}>
+                                <Ionicons name="settings-outline" size={26} color={tw.color('slate-400')} />
+                            </Pressable>
                         </View>
+                        <View style={tw`items-center px-4`}>
+                            <Image source={{ uri: userProfile.avatar_url || `https://ui-avatars.com/api/?name=${fullName}` }} style={tw`w-24 h-24 rounded-full`} />
+                            <Text style={tw`text-white text-2xl mt-4 font-bold`}>{fullName}</Text>
+                            <Text style={tw`text-slate-400 text-lg mb-4`}>@{userProfile.username}</Text>
+                        </View>
+                        <View style={tw`flex-row justify-around w-full my-4 border-y border-slate-700 py-4`}>
+                            {/* Gönderi Sayısı (Tıklanamaz) */}
+                            <View style={tw`items-center`}>
+                                <Text style={tw`text-white font-bold text-xl`}>{posts.length}</Text>
+                                <Text style={tw`text-slate-400`}>Gönderi</Text>
+                            </View>
 
-                        {/* Gönderiler Başlığı */}
-                        {posts.length > 0 && (
-                            <Text style={tw`text-white text-xl font-bold p-4 pt-0`}>Gönderiler</Text>
-                        )}
+                            {/* Takipçi Sayısı (Tıklanabilir) */}
+                            <Pressable onPress={() => navigation.navigate('FollowList' as never, { userId: userProfile.id, mode: 'followers', initialUsername: userProfile.username } as never)} style={tw`items-center`}>
+                                <Text style={tw`text-white font-bold text-xl`}>{followerCount}</Text>
+                                <Text style={tw`text-slate-400`}>Takipçi</Text>
+                            </Pressable>
+
+                            {/* Takip Edilen Sayısı (Tıklanabilir) */}
+                            <Pressable onPress={() => navigation.navigate('FollowList' as never, { userId: userProfile.id, mode: 'following', initialUsername: userProfile.username } as never)} style={tw`items-center`}>
+                                <Text style={tw`text-white font-bold text-xl`}>{followingCount}</Text>
+                                <Text style={tw`text-slate-400`}>Takip</Text>
+                            </Pressable>
+                        </View>
+                        {posts.length > 0 && <Text style={tw`text-white text-xl font-bold px-4 mb-2`}>Gönderiler</Text>}
                     </>
                 }
-
-                // Postların render edileceği kısım
                 renderItem={({ item }) => (
-                    <View style={tw`bg-soft-black border-t border-slate-800 p-4 mx-4 mb-4 rounded-lg`}>
-                        {item.content ? <Text style={tw`text-platinum-gray mb-3`}>{item.content}</Text> : null}
-                        {item.media_url && (
-                            <Image
-                                source={{ uri: item.media_url }}
-                                style={[tw`w-full rounded-lg`, { aspectRatio: 1 }]}
-                                resizeMode="cover"
-                            />
-                        )}
-                        {/* Gerekirse buraya beğeni/yorum sayıları da eklenebilir */}
-                    </View>
+                    <PostItem
+                        post={item}
+                        currentUserId={userProfile.id}
+                        onDelete={handleDeletePost}
+                        onToggleLike={() => handleToggleLike(item.id)} // handleToggleLike'ı FeedScreen'den kopyalayın
+                        onOpenComments={() => setActivePost({ id: item.id, ownerId: item.user_id })} // setActivePost state'i ekleyin
+                        onNavigateToProfile={navigateToUserProfile} // navigateToUserProfile'ı FeedScreen'den kopyalayın
+                    />
                 )}
-
-                // Post yoksa gösterilecek mesaj
                 ListEmptyComponent={
-                    <View style={tw`p-10 items-center`}>
-                        <Text style={tw`text-slate-400`}>Henüz gönderi yok.</Text>
-                    </View>
+                    <View style={tw`pt-4 items-center`}><Text style={tw`text-slate-400`}>Henüz gönderi yok.</Text></View>
                 }
             />
         </SafeAreaView>

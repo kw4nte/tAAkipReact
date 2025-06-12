@@ -43,13 +43,14 @@ export default function CalorieTrackerScreen() {
     const setSelectedDate = useAppStore((s) => s.setSelectedDate);
     const [meals, setMeals] = useState<any[]>([]);
     const [totalWater, setTotalWater] = useState(0);
-    const [dailyGoal, setDailyGoal] = useState<number | null>(null);
 
     const [refreshing, setRefreshing] = useState(false);
 
     const [isCalendarVisible, setIsCalendarVisible] = useState(false);
     const [isWaterModalVisible, setIsWaterModalVisible] = useState(false);
     const [waterInput, setWaterInput] = useState('');
+    const userProfile = useAppStore((s) => s.userProfile);
+    const dailyGoal = userProfile?.daily_calorie_goal;
 
 
     // GÜNCELLENDİ: Öğünleri artık seçili güne göre çekecek
@@ -95,27 +96,14 @@ export default function CalorieTrackerScreen() {
     }, []);
 
     // YENİ: Kullanıcının kalori hedefini çeken fonksiyon
-    const loadUserData = useCallback(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
 
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('daily_calorie_goal')
-            .eq('id', user.id)
-            .single();
-
-        if (error) Alert.alert('Hata', 'Kullanıcı verileri yüklenemedi.');
-        else setDailyGoal(data?.daily_calorie_goal ?? null);
-    }, []);
 
     // GÜNCELLENDİ: Ekran her açıldığında ve tarih değiştikçe verileri yeniden yükle
     // `useFocusEffect` sayesinde başka ekrandan geri dönüldüğünde de veriler güncellenir.
     useFocusEffect(useCallback(() => {
-        loadUserData();
         loadMeals(selectedDate);
         loadWater(selectedDate);
-    }, [selectedDate]));
+    }, [selectedDate, loadMeals, loadWater]));
 
     const handleAddWater = async () => {
         const mlValue = Number(waterInput);
@@ -150,11 +138,10 @@ export default function CalorieTrackerScreen() {
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         Promise.all([
-            loadUserData(),
             loadMeals(selectedDate),
             loadWater(selectedDate)
         ]).finally(() => setRefreshing(false));
-    }, [selectedDate, loadUserData, loadMeals, loadWater]);
+    }, [selectedDate, loadMeals, loadWater]);
 
     const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
 

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { supabase } from '../lib/supa';
 
 // --- Mevcut Tipleriniz (Değişiklik yok) ---
 type FeedPost = {
@@ -8,6 +9,22 @@ type FeedPost = {
     user: string;
     text: string;
     createdAt: string;
+};
+
+type Profile = {
+    id: string;
+    created_at: string;
+    first_name: string | null;
+    last_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+    gender: string | null;
+    date_of_birth: string | null;
+    weight_kg: number | null;
+    height_cm: number | null;
+    goal: string | null;
+    activity_level: 'sedentary' | 'light' | 'moderate' | 'active' | '';
+    daily_calorie_goal: number | null;
 };
 
 type CalorieEntry = {
@@ -22,50 +39,40 @@ type CalorieEntry = {
     createdAt: string;
 };
 
-interface Profile {
-    fullName: string;
-    avatarUri: string;
-    dailyGoal: number;
-}
 
 // --- YENİ EKLENEN KAYIT FORMU TİPİ ---
 // Kayıt adımları boyunca toplanacak verilerin tip tanımı.
 type RegistrationFormState = {
     firstName: string;
-    lastName:string;
-    gender: 'male' | 'female' | 'other' | ''; // Seçenekli yapı
-    dateOfBirth: string; // YYYY-MM-DD formatında
+    lastName: string;
+    username: string; // <-- EKLENDİ
+    gender: 'male' | 'female' | 'other' | '';
+    dateOfBirth: string;
     weight: string;
     height: string;
     goal: string;
-    activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | ''; // Seçenekli yapı
+    activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | '';
     email: string;
     password: string;
 };
 
 // --- Ana AppState Arayüzünü Güncelleme ---
 interface AppState {
-    // Mevcut state'ler
     isAuth: boolean;
-    profile: Profile;
+    userProfile: Profile | null;
     feedPosts: FeedPost[];
     calorieEntries: CalorieEntry[];
-
-    // YENİ EKLENEN KAYIT FORMU STATE'İ
     registrationForm: RegistrationFormState;
-
     selectedDate: string;
-    setSelectedDate: (date: string) => void;
 
-    // Mevcut aksiyonlar
+    // Aksiyonlar
     login: () => void;
     logout: () => void;
-    updateProfile: (p: Partial<Profile>) => void;
+    fetchUserProfile: () => Promise<void>;
+    setSelectedDate: (date: string) => void;
     addPost: (post: FeedPost) => void;
     addCalorie: (entry: CalorieEntry) => void;
     removeCalorie: (id: string) => void;
-
-    // YENİ EKLENEN KAYIT FORMU AKSİYONLARI
     setRegistrationFormField: <K extends keyof RegistrationFormState>(field: K, value: RegistrationFormState[K]) => void;
     resetRegistrationForm: () => void;
 }
@@ -74,13 +81,13 @@ interface AppState {
 const initialFormState: RegistrationFormState = {
     firstName: '',
     lastName: '',
+    username: '', // <-- EKLENDİ
     gender: '',
     dateOfBirth: '',
     weight: '',
     height: '',
     goal: '',
     activityLevel: '',
-    username: '',
     email: '',
     password: '',
 };
@@ -88,48 +95,50 @@ const initialFormState: RegistrationFormState = {
 
 export const useAppStore = create<AppState>()(
     persist(
-        (set) => ({
-            // --- Mevcut state ve aksiyonlarınız ---
+        (set, get) => ({
             isAuth: false,
-            profile: { fullName: '', avatarUri: '', dailyGoal: 2000 },
+            userProfile: null,
             feedPosts: [],
             calorieEntries: [],
-            login: () => set({ isAuth: true }),
-            logout: () => set({ isAuth: false }),
-            updateProfile: (p) =>
-                set((state) => ({ profile: { ...state.profile, ...p } })),
-            addPost: (post) =>
-                set((state) => ({ feedPosts: [post, ...state.feedPosts] })),
-            addCalorie: (entry) =>
-                set((state) => ({
-                    calorieEntries: [entry, ...state.calorieEntries],
-                })),
-            removeCalorie: (id) =>
-                set((state) => ({
-                    calorieEntries: state.calorieEntries.filter((e) => e.id !== id),
-                })),
-
-            // --- YENİ EKLENENLER ---
-            // Kayıt formu state'ini ve başlangıç değerini ekliyoruz.
             registrationForm: initialFormState,
+            selectedDate: new Date().toISOString().split('T')[0],
 
+            // AKSİYONLAR
+            login: () => set({ isAuth: true }),
+            logout: () => set({ isAuth: false, userProfile: null }),
 
-            selectedDate: new Date().toISOString().split('T')[0], // Başlangıçta bugünü tutar
-            setSelectedDate: (date) => set({ selectedDate: date }), // Tarihi güncelleyen fonksiyon
+            fetchUserProfile: async () => {
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+                        if (error) throw error;
+                        set({ userProfile: data });
+                    } else {
+                        set({ userProfile: null });
+                    }
+                } catch (error) {
+                    console.error('Error fetching user profile in store:', error);
+                    set({ userProfile: null });
+                }
+            },
 
-
-            // Kayıt formunun bir alanını güncellemek için aksiyon.
-            setRegistrationFormField: (field, value) =>
-                set((state) => ({
-                    registrationForm: { ...state.registrationForm, [field]: value },
-                })),
-
-            // Kayıt işlemi bitince veya iptal edilince formu temizlemek için aksiyon.
+            setSelectedDate: (date) => set({ selectedDate: date }),
+            addPost: (post) => set((state) => ({ feedPosts: [post, ...state.feedPosts] })),
+            addCalorie: (entry) => set((state) => ({ calorieEntries: [entry, ...state.calorieEntries] })),
+            removeCalorie: (id) => set((state) => ({ calorieEntries: state.calorieEntries.filter((e) => e.id !== id) })),
+            setRegistrationFormField: (field, value) => set((state) => ({ registrationForm: { ...state.registrationForm, [field]: value } })),
             resetRegistrationForm: () => set({ registrationForm: initialFormState }),
         }),
         {
-            name: 'taakip-storage', // Mevcut depolama adınız
+            name: 'taakip-storage',
             storage: createJSONStorage(() => AsyncStorage),
+            // İYİLEŞTİRME: Sadece verileri depola, fonksiyonları dışarıda bırak.
+            partialize: (state) => ({
+                isAuth: state.isAuth,
+                userProfile: state.userProfile,
+                selectedDate: state.selectedDate,
+            }),
         }
     )
 );

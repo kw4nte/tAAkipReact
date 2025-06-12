@@ -16,11 +16,13 @@ import {
     TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import PostItem from '../components/PostItem';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import FAB from '../components/FAB';
 import CommentsModal from '../components/CommentsModal';
+import { useAppStore } from '../store/useAppStore';
 
 
 interface Post {
@@ -58,6 +60,8 @@ export default function FeedScreen() {
     const [searchResults, setSearchResults] = useState<SearchProfile[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    const currentUserId = useAppStore((s) => s.userProfile?.id);
 
 
     // 1) Post listesini Supabase'ten çekme fonksiyonu
@@ -153,6 +157,10 @@ export default function FeedScreen() {
         }
     };
 
+    const handleDeletePost = (deletedPostId: number) => {
+        setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
+    };
+
 // YENİ: Sadece modalı kapatmak için kullanılır.
     const handleModalClose = () => {
         setActivePost(null);
@@ -181,58 +189,30 @@ export default function FeedScreen() {
         }
     }, [searchText]);
 
-    const navigateToUserProfile = (userId: string) => {
-        setIsSearchModalVisible(false);
-        nav.navigate('UserProfile' as never, { userId: userId } as never);
+     // Zaten eklemiştik
+
+    const navigateToUserProfile = (postAuthorId: string) => {
+        setIsSearchModalVisible(false); // Arama modalını her durumda kapat
+
+        // Eğer tıklanan postun sahibi, giriş yapmış kullanıcı ise, onu 'Profile' TAB'ına yönlendir.
+        if (postAuthorId === currentUserId) {
+            nav.navigate('Profile' as never);
+        } else {
+            // Değilse, normal şekilde UserProfile EKRANINA yönlendir.
+            nav.navigate('UserProfile' as never, { userId: postAuthorId } as never);
+        }
     };
 
-    // 5) Her bir post için renderItem fonksiyonu
-    // GÜNCELLENDİ: renderItem fonksiyonu yeni veri yapısına göre düzenlendi.
-    const renderItem = ({ item }: { item: Post }) => {
-        const fullName = `${item.first_name ?? ''} ${item.last_name ?? ''}`.trim();
-
-        return (
-            <View style={tw`bg-soft-black border border-slate-gray rounded-lg p-4 mb-4`}>
-                <Pressable onPress={() => navigateToUserProfile(item.user_id)} style={tw`flex-row items-center mb-3`}>
-                    <Image source={{ uri: item.avatar_url || `https://ui-avatars.com/api/?name=${fullName}&background=random` }} style={tw`w-10 h-10 rounded-full bg-slate-700`} />
-                    <Text style={tw`text-accent-gold font-semibold ml-3`}>{fullName || 'Kullanıcı'}</Text>
-                </Pressable>
-
-
-                {item.content ? (
-                    <Text style={tw`text-platinum-gray mb-3`}>{item.content}</Text>
-                ) : null}
-
-                {item.media_url && (
-                    <Pressable onPress={() => {/* Zoom modal logic buraya gelebilir */}} style={tw`mb-3`}>
-                        <Image source={{ uri: item.media_url }} style={[tw`w-full rounded-lg`, { aspectRatio: 1 }]} resizeMode="cover" />
-                    </Pressable>
-                )}
-
-                <View style={tw`flex-row items-center`}>
-                    {/* Beğeni Butonu: Artık 'is_liked_by_user' kullanıyor */}
-                    <Pressable onPress={() => toggleLike(item.id)} style={tw`flex-row items-center mr-4`}>
-                        <Ionicons
-                            name={item.is_liked_by_user ? 'heart' : 'heart-outline'}
-                            size={24}
-                            color={item.is_liked_by_user ? tw.color('accent-gold') : '#5e6367'}
-                        />
-                        <Text style={tw`text-platinum-gray ml-2`}>{item.likes_count}</Text>
-                    </Pressable>
-
-                    {/* Yorum Butonu: Artık 'has_commented_by_user' kullanıyor */}
-                    <Pressable onPress={() => setActivePost({ id: item.id, ownerId: item.user_id })} style={tw`flex-row items-center`}>
-                        <Ionicons
-                            name={item.has_commented_by_user ? 'chatbubble' : 'chatbubble-outline'}
-                            size={24}
-                            color={item.has_commented_by_user ? tw.color('accent-gold') : '#5e6367'}
-                        />
-                        <Text style={tw`text-platinum-gray ml-2`}>{item.comments_count}</Text>
-                    </Pressable>
-                </View>
-            </View>
-        );
-    };
+    const renderItem = ({ item }: { item: Post }) => (
+        <PostItem
+            post={item}
+            currentUserId={currentUserId}
+            onDelete={handleDeletePost}
+            onToggleLike={toggleLike}
+            onOpenComments={setActivePost}
+            onNavigateToProfile={navigateToUserProfile}
+        />
+    );
 
 
     return (

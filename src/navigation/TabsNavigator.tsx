@@ -10,7 +10,9 @@ import FavoriteFoodsScreen from "../screens/FavoriteFoodsScreen";
 import PostComposerScreen from "../screens/PostComposerScreen";
 import ProfileEditScreen from "../screens/ProfileEditScreen";
 import UserProfileScreen from '../screens/UserProfileScreen';
+import FollowListScreen from '../screens/FollowListScreen';
 import { useThemeColors } from '../theme/ThemeProvider';
+import tw from '../theme/tw';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -33,6 +35,15 @@ function FeedStack() {
                 name="UserProfile"
                 component={UserProfileScreen}
                 options={{ headerShown: true, title: '' }} />
+            <Stack.Screen
+                name="FollowList"
+                component={FollowListScreen}
+                options={{
+                    headerShown: true, // Başlığı göster
+                    headerStyle: { backgroundColor: tw.color('premium-black') }, // Arkaplan rengi
+                    headerTintColor: 'white', // Geri butonu ve başlık rengi
+                }}
+            />
         </Stack.Navigator>
     );
 }
@@ -51,6 +62,15 @@ function CalorieStack() {
                 options={{ headerShown: true, title: 'Favoriler' }}
             />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
+            <Stack.Screen
+                name="FollowList"
+                component={FollowListScreen}
+                options={{
+                    headerShown: true, // Başlığı göster
+                    headerStyle: { backgroundColor: tw.color('premium-black') }, // Arkaplan rengi
+                    headerTintColor: 'white', // Geri butonu ve başlık rengi
+                }}
+            />
         </Stack.Navigator>
     );
 }
@@ -60,6 +80,15 @@ function ScannerStack() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="ScannerMain" component={FoodScannerScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
+            <Stack.Screen
+                name="FollowList"
+                component={FollowListScreen}
+                options={{
+                    headerShown: true, // Başlığı göster
+                    headerStyle: { backgroundColor: tw.color('premium-black') }, // Arkaplan rengi
+                    headerTintColor: 'white', // Geri butonu ve başlık rengi
+                }}
+            />
         </Stack.Navigator>
     );
 }
@@ -68,6 +97,15 @@ function FitnessStack() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="FitnessMain" component={FitnessScreen} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
+            <Stack.Screen
+                name="FollowList"
+                component={FollowListScreen}
+                options={{
+                    headerShown: true, // Başlığı göster
+                    headerStyle: { backgroundColor: tw.color('premium-black') }, // Arkaplan rengi
+                    headerTintColor: 'white', // Geri butonu ve başlık rengi
+                }}
+            />
         </Stack.Navigator>
     );
 }
@@ -78,6 +116,15 @@ function ProfileStack() {
             <Stack.Screen name="ProfileEdit" component={ProfileEditScreen}
                           options={{ headerShown:true, title:'Profil' }} />
             <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ headerShown: true, title: '' }} />
+            <Stack.Screen
+                name="FollowList"
+                component={FollowListScreen}
+                options={{
+                    headerShown: true, // Başlığı göster
+                    headerStyle: { backgroundColor: tw.color('premium-black') }, // Arkaplan rengi
+                    headerTintColor: 'white', // Geri butonu ve başlık rengi
+                }}
+            />
         </Stack.Navigator>
     );
 }
