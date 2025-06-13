@@ -8,6 +8,7 @@ import { supabase } from '../lib/supa';
 import tw from '../theme/tw';
 import PostItem from '../components/PostItem';
 import { useAppStore } from '../store/useAppStore';
+import CommentsModal from '../components/CommentsModal';
 
 
 
@@ -26,15 +27,13 @@ export default function UserProfileScreen() {
     const [followingCount, setFollowingCount] = useState(0);
     const [isFollowing, setIsFollowing] = useState(false);
     const [posts, setPosts] = useState<Post[]>([]);
+    const [activePost, setActivePost] = useState<{ id: number; ownerId: string } | null>(null);
     const currentUserId = useAppStore((s) => s.userProfile?.id);
-
 
     const fetchProfileData = useCallback(async () => {
         setLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
         if (!user || !userId) { setLoading(false); return; }
-
-        // DÜZELTME: Kendi profiline yönlendirme mantığı buradan kaldırıldı.
 
         const profilePromise = supabase.from('profiles').select('id, username, first_name, last_name, avatar_url').eq('id', userId).single();
         const followersPromise = supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', userId);
@@ -71,44 +70,40 @@ export default function UserProfileScreen() {
         if (!currentUserId) return;
         setIsFollowing(true);
         setFollowerCount(prev => prev + 1);
-        const { error } = await supabase.from('followers').insert({ follower_id: currentUserId, following_id: userId });
-        if (error) {
-            setIsFollowing(false);
-            setFollowerCount(prev => prev - 1);
-            Alert.alert('Hata', 'Takip etme işlemi başarısız oldu.');
-        }
+        await supabase.from('followers').insert({ follower_id: currentUserId, following_id: userId });
     };
 
     const handleUnfollow = async () => {
         if (!currentUserId) return;
         setIsFollowing(false);
         setFollowerCount(prev => prev - 1);
-        const { error } = await supabase.from('followers').delete().match({ follower_id: currentUserId, following_id: userId });
-        if (error) {
-            setIsFollowing(true);
-            setFollowerCount(prev => prev + 1);
-            Alert.alert('Hata', 'Takipten çıkma işlemi başarısız oldu.');
-        }
+        await supabase.from('followers').delete().match({ follower_id: currentUserId, following_id: userId });
     };
 
     const handleDeletePost = (deletedPostId: number) => setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
 
-    const handleToggleLike = (postId: number) => {
-        setPosts(currentPosts =>
-            currentPosts.map(p => {
-                if (p.id === postId) {
-                    const currentlyLiked = p.is_liked_by_user;
-                    const newLikeCount = currentlyLiked ? p.likes_count - 1 : p.likes_count + 1;
-                    return { ...p, is_liked_by_user: !currentlyLiked, likes_count: newLikeCount };
-                }
-                return p;
-            })
-        );
-        // Arka planda Supabase'i güncelleme mantığı (FeedScreen'deki gibi) buraya da eklenebilir.
+    const handleToggleLike = async (postId: number) => {
+        if (!currentUserId) return;
+        const postIndex = posts.findIndex(p => p.id === postId);
+        if (postIndex === -1) return;
+
+        const postToUpdate = posts[postIndex];
+        const currentlyLiked = postToUpdate.is_liked_by_user;
+        const newLikeCount = currentlyLiked ? postToUpdate.likes_count - 1 : postToUpdate.likes_count + 1;
+
+        const updatedPosts = [...posts];
+        updatedPosts[postIndex] = { ...postToUpdate, is_liked_by_user: !currentlyLiked, likes_count: newLikeCount };
+        setPosts(updatedPosts);
+
+        if (currentlyLiked) {
+            await supabase.from('likes').delete().match({ post_id: postId, user_id: currentUserId });
+        } else {
+            await supabase.from('likes').insert({ post_id: postId, user_id: currentUserId });
+        }
     };
 
     const navigateToProfile = (profileId: string) => {
-        // Zaten bir profil sayfasındayken başka birine gitmek için 'push' kullanılır.
+        if (profileId === userId) return; // Zaten bu profildeysek bir şey yapma
         navigation.dispatch({ type: 'PUSH', payload: { name: 'UserProfile', params: { userId: profileId } } });
     };
 
@@ -116,7 +111,6 @@ export default function UserProfileScreen() {
     if (loading || !profile) {
         return <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}><ActivityIndicator color="#ffd700" /></SafeAreaView>;
     }
-
     const isOwnProfile = currentUserId === userId;
 
 
@@ -132,10 +126,10 @@ export default function UserProfileScreen() {
                             <Text style={tw`text-white text-2xl font-bold`}>{profile.first_name} {profile.last_name}</Text>
                             <Text style={tw`text-slate-400 text-lg mb-4`}>@{profile.username}</Text>
 
-                            <View style={tw`flex-row justify-around w-full mb-6`}>
-                                <View style={tw`items-center`}><Text style={tw`text-white font-bold text-xl`}>{posts.length}</Text><Text style={tw`text-slate-400`}>Gönderi</Text></View>
-                                <Pressable onPress={() => navigation.dispatch({ type: 'PUSH', payload: { name: 'FollowList', params: { userId: profile.id, mode: 'followers', initialUsername: profile.username } } })} style={tw`items-center`}><Text style={tw`text-white font-bold text-xl`}>{followerCount}</Text><Text style={tw`text-slate-400`}>Takipçi</Text></Pressable>
-                                <Pressable onPress={() => navigation.dispatch({ type: 'PUSH', payload: { name: 'FollowList', params: { userId: profile.id, mode: 'following', initialUsername: profile.username } } })} style={tw`items-center`}><Text style={tw`text-white font-bold text-xl`}>{followingCount}</Text><Text style={tw`text-slate-400`}>Takip</Text></Pressable>
+                            <View style={tw`flex-row justify-around w-full mb-6 border-y border-slate-700 py-4`}>
+                                <View style={tw`items-center px-2`}><Text style={tw`text-white font-bold text-xl`}>{posts.length}</Text><Text style={tw`text-slate-400`}>Gönderi</Text></View>
+                                <Pressable onPress={() => navigation.dispatch({ type: 'PUSH', payload: { name: 'FollowList', params: { userId: profile.id, mode: 'followers', initialUsername: profile.username } } })} style={tw`items-center px-2`}><Text style={tw`text-white font-bold text-xl`}>{followerCount}</Text><Text style={tw`text-slate-400`}>Takipçi</Text></Pressable>
+                                <Pressable onPress={() => navigation.dispatch({ type: 'PUSH', payload: { name: 'FollowList', params: { userId: profile.id, mode: 'following', initialUsername: profile.username } } })} style={tw`items-center px-2`}><Text style={tw`text-white font-bold text-xl`}>{followingCount}</Text><Text style={tw`text-slate-400`}>Takip</Text></Pressable>
                             </View>
 
                             <View style={tw`w-full`}>
@@ -154,11 +148,17 @@ export default function UserProfileScreen() {
                         currentUserId={currentUserId}
                         onDelete={handleDeletePost}
                         onToggleLike={() => handleToggleLike(item.id)}
-                        onOpenComments={() => { /* Yorum modalı burada da açılabilir */ }}
+                        onOpenComments={() => setActivePost({ id: item.id, ownerId: item.user_id })}
                         onNavigateToProfile={navigateToProfile}
                     />
                 )}
                 ListEmptyComponent={<View style={tw`pt-4 items-center`}><Text style={tw`text-slate-400`}>Henüz gönderi yok.</Text></View>}
+            />
+            <CommentsModal
+                post={activePost}
+                visible={!!activePost}
+                onClose={() => setActivePost(null)}
+                onCommentAdded={() => { /* Gerekirse yorum sayısını güncelleme mantığı eklenebilir */ }}
             />
         </SafeAreaView>
     );

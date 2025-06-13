@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.AventureTech.taakip",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "Barkodları tarayarak ürünlerin besin değerlerini hızlıca görmek için kameranıza erişmemiz gerekiyor.",
         "ITSAppUsesNonExemptEncryption": false

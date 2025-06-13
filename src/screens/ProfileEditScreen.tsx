@@ -19,6 +19,7 @@ import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import i18n from '../i18n';
 import DeleteAccountSheet from '../components/DeleteAccountSheet';
+import {useAppStore} from "../store/useAppStore";
 
 // 1. Arayüzü yeni şemaya göre güncelle: age -> date_of_birth, email kaldırıldı
 interface Profile {
@@ -54,6 +55,7 @@ export default function ProfileEditScreen() {
     const [activityLevel, setActivityLevel] = useState<string>('');
     const [username, setUsername] = useState<string>('');
     const [originalUsername, setOriginalUsername] = useState<string>('');
+    const [goal, setGoal] = useState<string>('');
 
 
     const getUid = async () => (await supabase.auth.getUser()).data.user?.id;
@@ -78,7 +80,7 @@ export default function ProfileEditScreen() {
                 .select(`
         id, avatar_url, first_name, last_name, gender,
         date_of_birth, account_type, weight_kg, height_cm, created_at,
-        username, activity_level
+        username, activity_level, goal
                 `)
                 .eq('id', user.id)
                 .single();
@@ -97,6 +99,7 @@ export default function ProfileEditScreen() {
                 setActivityLevel(data.activity_level ?? '');
                 setUsername(data.username ?? '');
                 setOriginalUsername(data.username ?? '');
+                setGoal(data.goal ?? '');
                 // Gelen doğum tarihi string'ini Date objesine çevir
                 if (data.date_of_birth) {
                     setDateOfBirth(new Date(data.date_of_birth));
@@ -225,8 +228,8 @@ export default function ProfileEditScreen() {
 
         const newUsername = username.trim();
 
-        if (!firstName.trim() || !lastName.trim()) {
-            Alert.alert('Uyarı', 'Lütfen ad ve soyad girin.');
+        if (!firstName.trim() || !lastName.trim() || !newUsername) {
+            Alert.alert('Uyarı', 'Ad, soyad ve kullanıcı adı alanları boş bırakılamaz.');
             return;
         }
 
@@ -237,6 +240,7 @@ export default function ProfileEditScreen() {
 
         setLoading(true);
 
+        // Kullanıcı adı değiştirildiyse, yeni adın başkası tarafından kullanılıp kullanılmadığını kontrol et
         if (newUsername !== originalUsername) {
             const { data: existingUser, error: checkError } = await supabase
                 .from('profiles')
@@ -257,27 +261,40 @@ export default function ProfileEditScreen() {
             }
         }
 
-        const genderToSave = gender ? gender.toLowerCase().trim() : null;
-
         const updates = {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             username: newUsername,
-            gender: genderToSave,
+            gender: gender ? gender.toLowerCase().trim() : null,
             weight_kg: weight ? Number(weight) : null,
             height_cm: height ? Number(height) : null,
             date_of_birth: dateOfBirth.toISOString().split('T')[0],
+            activity_level: activityLevel,
+            goal: goal,
         };
 
         const { error } = await supabase.from('profiles').update(updates).eq('id', uid);
+
+        // setLoading(true) burada çağrıldığı için, işlem bitince false yapalım.
+        setLoading(false);
 
         if (error) {
             console.error('Profil güncelleme hatası:', error.message);
             Alert.alert('Hata', 'Profil güncelleme işlemi başarısız oldu.');
         } else {
+            // 1. Backend'deki temel hedefi yeniden hesaplat
             await supabase.functions.invoke('calculate-user-metrics');
+
+            // 2. EN ÖNEMLİ ADIM: Uygulamanın global state'ini en güncel profil verileriyle yenile
+            await useAppStore.getState().fetchUserProfile();
+
+            // 3. Kullanıcıya başarı mesajı göster
             Alert.alert('Başarılı', 'Profiliniz başarıyla güncellendi.');
+
+            // 4. Orijinal kullanıcı adını güncelle (eğer değiştiyse)
             setOriginalUsername(newUsername);
+
+            // 5. SON OLARAK bir önceki ekrana dön
             navigation.goBack();
         }
     };
@@ -383,6 +400,13 @@ export default function ProfileEditScreen() {
                     <Pressable onPress={() => setActivityLevel('light')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, activityLevel === 'light' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Az Hareketli / Hafif Egzersiz</Text></Pressable>
                     <Pressable onPress={() => setActivityLevel('moderate')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, activityLevel === 'moderate' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Orta Derecede Hareketli</Text></Pressable>
                     <Pressable onPress={() => setActivityLevel('active')} style={[tw`w-full p-3 border-2 rounded-lg`, activityLevel === 'active' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Çok Aktif</Text></Pressable>
+                </View>
+
+                <Text style={tw`text-slate-400 text-sm ml-1 mb-1 mt-3`}>Hedefim</Text>
+                <View style={tw`flex-col mb-3`}>
+                    <Pressable onPress={() => setGoal('stay_healthy')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, goal === 'stay_healthy' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Sağlıklı Kalmak</Text></Pressable>
+                    <Pressable onPress={() => setGoal('lose_weight')} style={[tw`w-full p-3 border-2 rounded-lg mb-2`, goal === 'lose_weight' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Kilo Vermek</Text></Pressable>
+                    <Pressable onPress={() => setGoal('gain_muscle')} style={[tw`w-full p-3 border-2 rounded-lg`, goal === 'gain_muscle' ? tw`border-accent-gold bg-accent-gold/20` : tw`border-slate-700`]}><Text style={tw`text-white text-center`}>Kas Kazanmak</Text></Pressable>
                 </View>
 
                 {/* 4. Yaş yerine Doğum Tarihi Düzenleyici */}

@@ -1,4 +1,4 @@
-// src/screens/ProfileScreen.tsx (Nihai Sürüm)
+// src/screens/ProfileScreen.tsx (Nihai ve Tüm Düzeltmeleri İçeren Sürüm)
 
 import { useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,10 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import tw from '../theme/tw';
 import { supabase } from '../lib/supa';
 import { useAppStore } from '../store/useAppStore';
-import PostItem from '../components/PostItem'; // Yeni PostItem bileşenini import ediyoruz
+import PostItem from '../components/PostItem';
+import CommentsModal from '../components/CommentsModal';
 
 
-interface Post { id: number; user_id: string; content: string; media_url: string | null; created_at: string; }
+interface Post { id: number; user_id: string; content: string; media_url: string | null; created_at: string; first_name: string | null; last_name: string | null; avatar_url: string | null; likes_count: number; comments_count: number; is_liked_by_user: boolean; has_commented_by_user: boolean; }
 
 export default function ProfileScreen() {
     const navigation = useNavigation();
@@ -24,28 +25,21 @@ export default function ProfileScreen() {
     const [loading, setLoading] = useState(true);
     const [activePost, setActivePost] = useState<{ id: number; ownerId: string } | null>(null);
 
-    // ProfileScreen.tsx içinde
-
     const fetchData = useCallback(async () => {
-        if (!userProfile) {
-            // Profil bilgisi henüz global state'de yoksa, ilk yükleme için loading göster
-            // App.tsx'teki fetch bunu halledecek, ama bir güvenlik katmanı olarak kalabilir.
-            setLoading(true);
-            return;
-        };
+        if (!userProfile) return;
+        setLoading(true);
 
-        // Bu fonksiyonun geri kalanı aynı...
         const followersPromise = supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', userProfile.id);
         const followingPromise = supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', userProfile.id);
         const postsPromise = supabase.rpc('get_posts_for_user', { profile_id: userProfile.id });
 
-        // setLoading(true) burada olmalı
-        setLoading(true);
-        const [{ count: followers }, { count: following }, { data: postData }] = await Promise.all([followersPromise, followingPromise, postsPromise]);
+        const [ { count: followers }, { count: following }, { data: postData, error: postError } ] = await Promise.all([followersPromise, followingPromise, postsPromise]);
+
+        if (postError) console.error("Post çekme hatası (ProfileScreen):", postError.message);
 
         setFollowerCount(followers ?? 0);
         setFollowingCount(following ?? 0);
-        setPosts(postData ?? []);
+        setPosts(postData as Post[] ?? []);
         setLoading(false);
     }, [userProfile]);
 
@@ -79,33 +73,39 @@ export default function ProfileScreen() {
         return <SafeAreaView style={tw`flex-1 bg-premium-black justify-center items-center`}><ActivityIndicator color={tw.color('accent-gold')} /></SafeAreaView>;
     }
 
-
-
-    const handleToggleLike = async (postId: number) => {
-        // Giriş yapmış kullanıcı bilgisi (userProfile) store'dan geldiği için kontrol edelim.
+    const toggleLike = async (postId: number) => {
         if (!userProfile) return;
 
-        // Optimistic Update için önce yerel state'i anında güncelleyelim
         const postToUpdate = posts.find(p => p.id === postId);
         if (!postToUpdate) return;
 
         const currentlyLiked = postToUpdate.is_liked_by_user;
         const newLikeCount = currentlyLiked ? postToUpdate.likes_count - 1 : postToUpdate.likes_count + 1;
 
+        // 1. Arayüzü anında güncelle (Optimistic Update)
         setPosts(currentPosts =>
             currentPosts.map(p =>
                 p.id === postId ? { ...p, is_liked_by_user: !currentlyLiked, likes_count: newLikeCount } : p
             )
         );
 
-        // Arka planda Supabase veritabanını güncelleyelim
+        // 2. Arka planda veritabanını güncelle
         if (currentlyLiked) {
-            // Beğeniyi geri al
             await supabase.from('likes').delete().match({ post_id: postId, user_id: userProfile.id });
         } else {
-            // Yeni beğeni ekle
             await supabase.from('likes').insert({ post_id: postId, user_id: userProfile.id });
         }
+    };
+
+    const handleCommentAdded = (postId: number) => {
+        setPosts(currentPosts =>
+            currentPosts.map(p =>
+                p.id === postId ? { ...p, comments_count: p.comments_count + 1, has_commented_by_user: true } : p
+            )
+        );
+    };
+    const handleModalClose = () => {
+        setActivePost(null);
     };
 
     const fullName = `${userProfile.first_name ?? ''} ${userProfile.last_name ?? ''}`.trim();
@@ -158,14 +158,21 @@ export default function ProfileScreen() {
                         post={item}
                         currentUserId={userProfile.id}
                         onDelete={handleDeletePost}
-                        onToggleLike={() => handleToggleLike(item.id)} // handleToggleLike'ı FeedScreen'den kopyalayın
-                        onOpenComments={() => setActivePost({ id: item.id, ownerId: item.user_id })} // setActivePost state'i ekleyin
-                        onNavigateToProfile={navigateToUserProfile} // navigateToUserProfile'ı FeedScreen'den kopyalayın
+                        onToggleLike={() => toggleLike(item.id)}
+                        onOpenComments={() => setActivePost({ id: item.id, ownerId: item.user_id })}
+                        onNavigateToProfile={navigateToUserProfile}
                     />
                 )}
                 ListEmptyComponent={
                     <View style={tw`pt-4 items-center`}><Text style={tw`text-slate-400`}>Henüz gönderi yok.</Text></View>
                 }
+            />
+            {/* DÜZELTME: Yorumlar modalı JSX'e eklendi */}
+            <CommentsModal
+                post={activePost}
+                visible={!!activePost}
+                onClose={handleModalClose}
+                onCommentAdded={() => handleCommentAdded(activePost!.id)}
             />
         </SafeAreaView>
     );

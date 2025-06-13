@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlatList, Text, View, RefreshControl, Alert, Modal, TextInput, Pressable, Keyboard } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -52,6 +52,57 @@ export default function CalorieTrackerScreen() {
     const userProfile = useAppStore((s) => s.userProfile);
     const dailyGoal = userProfile?.daily_calorie_goal;
 
+    // YENİ: Tüketilen toplam makroları hesaplayalım
+    const totals = useMemo(() => {
+        return meals.reduce(
+            (acc, meal) => {
+                acc.calories += meal.calories || 0;
+                acc.protein += meal.protein || 0;
+                acc.carbs += meal.carbs || 0;
+                acc.fat += meal.fat || 0;
+                return acc;
+            },
+            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        );
+    }, [meals]);
+
+    // YENİ: Hedef kalori ve makroları hesaplayan bölüm
+    const targets = useMemo(() => {
+        if (!userProfile?.daily_calorie_goal || !userProfile.goal) {
+            return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+        }
+
+        let targetCalories = userProfile.daily_calorie_goal;
+        let proteinRatio = 0.20, carbsRatio = 0.50, fatRatio = 0.30;
+
+        switch (userProfile.goal) {
+            case 'lose_weight': // Hedefin veritabanındaki değerini buraya yazın
+                targetCalories -= 300;
+                proteinRatio = 0.35;
+                carbsRatio = 0.35;
+                fatRatio = 0.30;
+                break;
+            case 'gain_muscle': // Hedefin veritabanındaki değerini buraya yazın
+                targetCalories += 300;
+                proteinRatio = 0.30; // Formülde %30 yazıyor, %35 değil
+                carbsRatio = 0.55; // Formülde %50 yazıyor, %55 değil. Kodda %55 kullandım.
+                fatRatio = 0.15; // Formülde %20 yazıyor, %10 değil. Kodda 1-(0.55+0.30)=0.15 kullandım.
+                break;
+            // 'stay_healthy' (sağlıklı kalmak) için default değerler zaten ayarlı
+        }
+
+        // Protein ve Karbonhidrat 4 kalori/gram, Yağ 9 kalori/gram
+        const targetProtein = Math.round((targetCalories * proteinRatio) / 4);
+        const targetCarbs = Math.round((targetCalories * carbsRatio) / 4);
+        const targetFat = Math.round((targetCalories * fatRatio) / 9);
+
+        return {
+            calories: targetCalories,
+            protein: targetProtein,
+            carbs: targetCarbs,
+            fat: targetFat,
+        };
+    }, [userProfile]);
 
     // GÜNCELLENDİ: Öğünleri artık seçili güne göre çekecek
     const loadMeals = useCallback(async (date: string) => {
@@ -178,21 +229,35 @@ export default function CalorieTrackerScreen() {
 
             {/* YENİ: Hedef Kalori ve Toplamlar Alanı */}
             <View style={tw`p-4 border-b border-slate-gray`}>
-                <View style={tw`flex-row justify-between items-center mb-2`}>
-                    <Text style={tw`text-lg text-platinum-gray`}>Hedef:</Text>
+                {/* Kalori */}
+                <View style={tw`flex-row justify-between items-center mb-3`}>
+                    <Text style={tw`text-lg text-platinum-gray`}>Kalori:</Text>
                     <Text style={tw`text-lg font-bold text-accent-gold`}>
-                        {dailyGoal ? `${dailyGoal} kcal` : 'Hesaplanıyor...'}
+                        {totals.calories} / {targets.calories > 0 ? targets.calories : '...'} kcal
                     </Text>
-                </View>
-                <View style={tw`flex-row justify-between items-center mb-2`}>
-                    <Text style={tw`text-lg text-platinum-gray`}>Alınan:</Text>
-                    <Text style={tw`text-lg font-bold text-white`}>{totalCalories} kcal</Text>
-                </View>
-                <View style={tw`flex-row justify-between items-center`}>
                     <Text style={tw`text-lg text-platinum-gray`}>Su:</Text>
                     <Text style={tw`text-lg font-bold text-white`}>{totalWater} ml</Text>
                 </View>
-            </View>
+                {/* Makrolar */}
+                <View style={tw`flex-row justify-between`}>
+                    <View style={tw`items-center`}>
+                        <Text style={tw`text-white`}>{totals.protein.toFixed(1)}g</Text>
+                        <Text style={tw`text-slate-400 text-xs`}>Protein</Text>
+                        <Text style={tw`text-accent-gold/70 text-xs`}>{targets.protein}g</Text>
+                    </View>
+                    <View style={tw`items-center`}>
+                        <Text style={tw`text-white`}>{totals.carbs.toFixed(1)}g</Text>
+                        <Text style={tw`text-slate-400 text-xs`}>Karbonhidrat</Text>
+                        <Text style={tw`text-accent-gold/70 text-xs`}>{targets.carbs}g</Text>
+                    </View>
+                    <View style={tw`items-center`}>
+                        <Text style={tw`text-white`}>{totals.fat.toFixed(1)}g</Text>
+                        <Text style={tw`text-slate-400 text-xs`}>Yağ</Text>
+                        <Text style={tw`text-accent-gold/70 text-xs`}>{targets.fat}g</Text>
+                    </View>
+                </View>
+                </View>
+
 
             {/* GÜNCELLENDİ: Tarayıcıya giderken seçili tarihi parametre olarak gönder */}
             <View style={tw`p-4`}>
