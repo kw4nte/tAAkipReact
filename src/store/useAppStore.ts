@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '../lib/supa';
+import type { User } from '@supabase/supabase-js';
 
 // --- Mevcut Tipleriniz (Değişiklik yok) ---
 type FeedPost = {
@@ -64,9 +65,10 @@ interface AppState {
     calorieEntries: CalorieEntry[];
     registrationForm: RegistrationFormState;
     selectedDate: string;
+    user: User | null;
 
     // Aksiyonlar
-    login: () => void;
+    login: (user: User) => void;
     logout: () => void;
     fetchUserProfile: () => Promise<void>;
     setSelectedDate: (date: string) => void;
@@ -96,6 +98,7 @@ const initialFormState: RegistrationFormState = {
 export const useAppStore = create<AppState>()(
     persist(
         (set, get) => ({
+            user: null,
             isAuth: false,
             userProfile: null,
             feedPosts: [],
@@ -104,8 +107,8 @@ export const useAppStore = create<AppState>()(
             selectedDate: new Date().toISOString().split('T')[0],
 
             // AKSİYONLAR
-            login: () => set({ isAuth: true }),
-            logout: () => set({ isAuth: false, userProfile: null }),
+            login: (user) => set({ isAuth: true, user: user }),
+            logout: () => set({ isAuth: false, userProfile: null, user: null }),
 
             fetchUserProfile: async () => {
                 try {

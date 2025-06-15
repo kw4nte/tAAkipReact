@@ -1,15 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, ActivityIndicator } from 'react-native';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { ThemeProvider, useThemeColors } from './src/theme/ThemeProvider';
 import RootNavigator from './src/navigation/RootNavigator';
 import { supabase } from './src/lib/supa';
 import { useAppStore } from './src/store/useAppStore';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { registerForPushNotificationsAsync } from './src/lib/notificationManager';
-
 
 function ThemedStatusBar() {
     const { background } = useThemeColors();
@@ -19,63 +17,50 @@ function ThemedStatusBar() {
 }
 
 export default function App() {
-    const loginStore = useAppStore((s) => s.login);
-    const logoutStore = useAppStore((s) => s.logout);
-    const fetchUserProfile = useAppStore((s) => s.fetchUserProfile);
+    // Store'dan ihtiyacımız olan her şeyi tek seferde alıyoruz
+    const { login, logout, fetchUserProfile } = useAppStore();
+    // Yüklenme durumunu yönetmek için
+    const [isAppReady, setIsAppReady] = useState(false);
 
-    async function registerForPushNotificationsAsync() {
-        if (Device.isDevice) {
-            const { status: existingStatus } = await Notifications.getPermissionsAsync();
-            let finalStatus = existingStatus;
-            if (existingStatus !== 'granted') {
-                const { status } = await Notifications.requestPermissionsAsync();
-                finalStatus = status;
-            }
-            if (finalStatus !== 'granted') {
-                // Kullanıcı izin vermedi
-                return;
-            }
-            // Token'ı al
-            const token = (await Notifications.getExpoPushTokenAsync()).data;
-
-            // Token'ı Supabase'e kaydet
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user && token) {
-                await supabase.from('profiles').update({ push_token: token }).eq('id', user.id);
-            }
-        }
-    }
-
-    // 1) Uygulama açıldığında mevcut Supabase oturumunu kontrol et
     useEffect(() => {
+        // Formu resetleme işlemini listener dışına alabiliriz, sadece bir kez çalışsın.
         useAppStore.getState().resetRegistrationForm();
-        (async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                loginStore();
-                fetchUserProfile(); // <-- YENİ: Oturum varsa profili hemen çek
-            } else {
-                logoutStore();
-            }
-        })();
-    }, [fetchUserProfile, loginStore, logoutStore]);
 
-    // 2) Supabase auth state değişikliklerini dinle (SIGNED_OUT, TOKEN_REFRESH_FAILED, SIGNED_IN)
-    useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => { // async eklendi
-            if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESH_FAILED') {
-                logoutStore();
-            } else if (event === 'SIGNED_IN') {
-                loginStore();
-                await fetchUserProfile(); // profili çekmesini bekle
-                await registerForPushNotificationsAsync(); // YENİ: Giriş yapıldığında token'ı kaydet
-            }
-        });
+        // TEK bir useEffect ile hem başlangıç durumunu hem de sonraki değişiklikleri yönetiyoruz.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (_event, session) => {
+                // event'i SIGNED_IN veya INITIAL_SESSION olarak da kontrol edebilirsiniz, ama session kontrolü en temizi.
+                if (session && session.user) {
+                    // Oturum varsa (ilk açılışta veya yeni girişte)
+                    login(session.user);
+                    await fetchUserProfile();
+                    // notificationManager'dan import ettiğimiz fonksiyonu çağırıyoruz
+                    await registerForPushNotificationsAsync();
+                } else {
+                    // Oturum yoksa veya çıkış yapıldıysa
+                    logout();
+                }
 
+                // Oturum durumu ne olursa olsun, kontrol bittiğinde uygulamayı hazır hale getir.
+                // Bu, "flicker" (ekran titremesi) sorununu çözer.
+                setIsAppReady(true);
+            }
+        );
+
+        // Component kaldırıldığında listener'ı temizle
         return () => {
             subscription.unsubscribe();
         };
-    }, [fetchUserProfile, loginStore, logoutStore]);
+    }, [login, logout, fetchUserProfile]);
+
+    // Oturum kontrolü bitene kadar bir yüklenme animasyonu göster
+    if (!isAppReady) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                <ActivityIndicator size="large" color="#FFF" />
+            </View>
+        );
+    }
 
     return (
         <ErrorBoundary>

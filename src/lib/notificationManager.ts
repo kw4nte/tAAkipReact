@@ -3,9 +3,8 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { supabase } from './supa'; // supabase client'ınızın olduğu yolu doğrulayın
+import { supabase } from './supa';
 
-// Bildirimlerin uygulama ön plandayken nasıl davranacağını belirler
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -17,7 +16,8 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotificationsAsync() {
     // Fiziksel bir cihazda çalışıp çalışmadığını kontrol et
     if (!Device.isDevice) {
-        alert('Push bildirimleri için fiziksel bir cihaz kullanılmalıdır.');
+        // Geliştirme ortamında can sıkıcı olmaması için alert'i console.warn ile değiştirebilirsiniz.
+        console.warn('Push bildirimleri için fiziksel bir cihaz kullanılmalıdır.');
         return;
     }
 
@@ -48,25 +48,24 @@ export async function registerForPushNotificationsAsync() {
     }
 
     try {
-        // Cihazın benzersiz Expo Push Token'ını al
         const token = (await Notifications.getExpoPushTokenAsync()).data;
-        console.log('Expo Push Token:', token); // Token'ı kontrol etmek için logla
-
-        // Token'ı Supabase'deki kullanıcının profiline kaydet
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && token) {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ push_token: token })
-                .eq('id', user.id);
-
-            if (error) {
-                console.error('Push token güncellenirken hata:', error.message);
-            } else {
-                console.log('Push token başarıyla kaydedildi.');
-            }
+        if (!token) {
+            console.log("Push token alınamadı.");
+            return;
         }
-    } catch (e) {
-        console.error('Push token alınırken hata oluştu:', e);
+        console.log('Alınan Expo Push Token:', token);
+
+        // Veritabanı işlemleri yerine Edge Function'ı çağırıyoruz
+        const { error } = await supabase.functions.invoke('update-push-token', {
+            body: { pushToken: token },
+        })
+
+        if (error) {
+            console.error('Push token güncellenirken Edge Function hatası:', error.message);
+        } else {
+            console.log('Push token, Edge Function aracılığıyla başarıyla güncellendi.');
+        }
+    } catch (e: any) {
+        console.error('Push token kayıt sürecinde genel bir hata oluştu:', e.message);
     }
 }
